@@ -112,13 +112,22 @@ pontualmente no futuro para análises de dados do piloto, se fizer sentido.
 
 ---
 
-## DEC-008 — Baixa automática de estoque: trigger no banco vs. lógica de aplicação
-**Data:** — | **Status:** PENDENTE
+## DEC-008 — Baixa automática de estoque: trigger no banco
+**Data:** 2026-07-16 | **Status:** aprovada (implementada na Sessão #1)
 
-**Contexto:** doses com status `tomado_*` geram saída; `recusado` gera perda.
-Trigger no Postgres garante consistência independente do cliente; lógica na
-aplicação é mais fácil de depurar. Decidir na implementação (tendência: trigger,
-com constraint de unicidade administracao_id na movimentação para evitar dupla baixa).
+**Decisão:** A baixa automática é um trigger AFTER INSERT em `administracoes`
+(`trg_baixa_automatica_estoque`): status `tomado_*` gera movimentação
+`saida_administracao`; `recusado` gera `perda`; `nao_tomado` não gera nada.
+UNIQUE em `movimentacoes_estoque.administracao_id` impede dupla baixa.
+A movimentação herda `registrado_em` da administração como `criado_em` — em
+registro tardio (DEC-010), a baixa fica datada no momento real da dose.
+
+**Racional:** consistência independente do cliente (app, seed, SQL direto):
+nenhum caminho de escrita esquece a baixa. Testado na Sessão #1: os três
+status, a dupla baixa (rejeitada) e o saldo derivado.
+
+**Alternativas descartadas:** lógica na aplicação (mais fácil de depurar, mas
+permite administração sem baixa se algum cliente esquecer a regra).
 
 ---
 
@@ -196,3 +205,51 @@ ledger — a proposta de valor central do produto.
   passa a ser opcional (NULL = dose avulsa)
 - Medicamentos `sos` não entram em rodadas nem no fechamento de turno; aparecem
   apenas no fluxo de dose avulsa e nos relatórios de estoque/consumo
+
+---
+
+## DEC-016 — Ledger com quantidade sinalizada (entradas > 0, saídas < 0)
+**Data:** 2026-07-16 | **Status:** aprovada (tomada na Sessão #1)
+
+**Decisão:** `movimentacoes_estoque.quantidade` carrega o sinal: entradas
+positivas, saídas/perdas negativas, ajuste de contagem qualquer valor ≠ 0.
+Saldo = `SUM(quantidade)` puro, sem CASE por tipo. Constraint no banco
+(`movimentacoes_sinal_por_tipo`) garante o sinal correto para cada tipo.
+
+**Racional:** simplifica todas as consultas de saldo/cobertura e elimina a
+classe de bug "esqueceu de negar a saída". O tipo continua registrando a
+natureza da movimentação para auditoria e relatórios.
+
+**Alternativas descartadas:** quantidade sempre positiva com sinal derivado do
+tipo em cada consulta (repetição de lógica e risco de divergência).
+
+---
+
+## DEC-017 — Registros de auditoria imutáveis (administracoes e ledger)
+**Data:** 2026-07-16 | **Status:** aprovada (tomada na Sessão #1)
+
+**Decisão:** `administracoes` e `movimentacoes_estoque` não recebem UPDATE nem
+DELETE pelo app: as políticas de RLS dão apenas SELECT + INSERT ao papel
+autenticado, e um trigger (`trg_administracao_imutavel`) bloqueia alteração dos
+campos com efeito no ledger mesmo por outros caminhos. Erro de registro se
+corrige com novo registro + movimentação manual de ajuste/perda. Nas tabelas de
+cadastro não há política de DELETE — remoção é soft delete (DEC-006).
+
+**Racional:** a trilha de auditoria é requisito do produto (atos de cuidado com
+idosos); ledger editável destruiria a confiança no relatório de divergência,
+que é a dor nº 1 da cliente.
+
+---
+
+## DEC-018 — Hash de PIN provisório no seed: SHA-256
+**Data:** 2026-07-16 | **Status:** provisória — revisar na Sessão #2
+
+**Decisão:** o seed grava `cuidadores.pin_hash` como SHA-256 hex do PIN, sem
+salt. É um formato de dados de teste; o mecanismo definitivo de autenticação
+por PIN (algoritmo de hash, salt, verificação no cliente vs. RPC) é escopo da
+Sessão #2 e deve substituir/ratificar este formato.
+
+**Racional:** destrava o seed sem antecipar o design de autenticação. PIN de 4
+dígitos é força-bruta trivial em qualquer hash rápido — a segurança real virá
+do desenho da Sessão #2 (ex.: rate limit, verificação server-side), não do
+algoritmo usado no seed.

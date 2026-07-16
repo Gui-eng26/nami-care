@@ -1,0 +1,14 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+dev-dist/
+
+# Ambiente — nunca versionar chaves
+.env.local
+.env*.local
+
+# Sistema / editor
+.DS_Store
+*.log
