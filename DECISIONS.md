@@ -84,11 +84,31 @@ implícito de um sistema que registra atos de cuidado com idosos.
 
 ---
 
-## DEC-007 — Hospedagem do frontend
-**Data:** — | **Status:** PENDENTE
+## DEC-007 — Hospedagem do frontend: Railway
+**Data:** 2026-07-15 | **Status:** aprovada
 
-**Opções:** Vercel (free tier generoso para PWA estática) vs. Railway (consolidar
-tudo onde já está a Nami). Decidir na fase de implementação.
+**Decisão:** Frontend hospedado no Railway.
+
+**Racional:** Consolidação de plataformas — Guilherme já usa Railway na Nami Life
+(conta, billing e familiaridade existentes). Adicionar Vercel criaria mais um
+cadastro/login/painel para um benefício marginal (free tier), enquanto o custo de
+um site estático no Railway é irrisório.
+
+**Alternativas descartadas:** Vercel (free tier, mas plataforma adicional).
+
+---
+
+## DEC-015 — Linguagem única: JavaScript em todo o projeto
+**Data:** 2026-07-15 | **Status:** aprovada (revisada no mesmo dia)
+
+**Decisão:** Todo o projeto em JavaScript — app (React/PWA) e scripts auxiliares
+(seed, utilidades em Node).
+
+**Racional:** O frontend só pode ser JS (o navegador não executa Python), e manter
+uma linguagem única simplifica o repositório e o setup. Guilherme já tem noção de
+JS pelo projeto Nami Life, e a base de Python facilita a leitura. Python foi
+considerado para scripts auxiliares, mas a consolidação venceu; pode ser adotado
+pontualmente no futuro para análises de dados do piloto, se fizer sentido.
 
 ---
 

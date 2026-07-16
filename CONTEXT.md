@@ -39,6 +39,7 @@
 - Relatórios de sessão: salvar no Google Drive, mesma estrutura usada na Nami
 - Idioma da documentação: português; código e nomes de tabelas/colunas: português
   sem acentos (ex.: `movimentacoes_estoque`)
+- Linguagem única: JavaScript em todo o projeto — app e scripts (DEC-015)
 
 ## Vínculo com a Nami Life
 

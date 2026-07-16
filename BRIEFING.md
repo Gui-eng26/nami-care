@@ -59,7 +59,8 @@ ficam vinculadas ao cuidador do turno ativo. Troca de turno = novo login.
 
 - **Frontend:** React (PWA) — mobile-first, otimizado para o celular da casa
 - **Backend/BD:** Supabase (Postgres, Auth, Row Level Security)
-- **Hospedagem frontend:** Vercel ou Railway (decidir — ver DECISIONS)
+- **Hospedagem frontend:** Railway (DEC-007 — consolidação com a infra da Nami Life)
+- **Linguagem única:** JavaScript em todo o projeto (DEC-015)
 - **Sem cron/servidor Node:** a "agenda" é consulta em tempo real aos horários;
   notificações push ficam fora do MVP (ver seção 8)
 - **Repositório:** a criar (sugestão: `Gui-eng26/nami-care`)
