@@ -253,3 +253,29 @@ Sessão #2 e deve substituir/ratificar este formato.
 dígitos é força-bruta trivial em qualquer hash rápido — a segurança real virá
 do desenho da Sessão #2 (ex.: rate limit, verificação server-side), não do
 algoritmo usado no seed.
+
+## DEC-019 — Autenticação: usuário único Supabase + PIN por cuidador
+
+**Data:** 2026-07-16 | **Status:** decidida
+
+**Decisão:** A casa de repouso opera com um único usuário Supabase autenticado
+no dispositivo compartilhado, satisfazendo as políticas de RLS. A identificação
+individual dos cuidadores é feita na camada de aplicação via PIN, que determina
+quem detém o turno ativo.
+
+**Contexto:** A casa usa um celular compartilhado entre 4 cuidadores.
+Login/logout individual no Supabase adicionaria fricção operacional sem ganho
+de segurança proporcional ao contexto.
+
+**Alternativas consideradas:**
+- Um usuário Supabase por cuidador — descartado pela fricção de troca de
+  sessão no dispositivo compartilhado.
+
+**Implicações:**
+- Toda ação registrada (dose, tratamento, fechamento de turno) grava o
+  cuidador identificado pelo PIN do turno ativo, não o usuário Supabase.
+- O fechamento obrigatório de turno passa a ser o mecanismo que troca o
+  detentor do PIN ativo.
+- O mecanismo definitivo de PIN (hash com salt, rate limit, verificação
+  server-side via RPC) é escopo da Sessão #2 e substitui/ratifica o formato
+  provisório do seed registrado na **DEC-018**.
