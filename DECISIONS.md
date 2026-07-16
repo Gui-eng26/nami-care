@@ -242,7 +242,7 @@ que é a dor nº 1 da cliente.
 ---
 
 ## DEC-018 — Hash de PIN provisório no seed: SHA-256
-**Data:** 2026-07-16 | **Status:** provisória — revisar na Sessão #2
+**Data:** 2026-07-16 | **Status:** SUBSTITUÍDA pela DEC-020 (Sessão #2, 2026-07-16)
 
 **Decisão:** o seed grava `cuidadores.pin_hash` como SHA-256 hex do PIN, sem
 salt. É um formato de dados de teste; o mecanismo definitivo de autenticação
@@ -279,3 +279,85 @@ de segurança proporcional ao contexto.
 - O mecanismo definitivo de PIN (hash com salt, rate limit, verificação
   server-side via RPC) é escopo da Sessão #2 e substitui/ratifica o formato
   provisório do seed registrado na **DEC-018**.
+
+---
+
+## DEC-020 — PIN definitivo: bcrypt no banco, verificação exclusivamente server-side
+**Data:** 2026-07-16 | **Status:** aprovada (implementada na Sessão #2; substitui a DEC-018)
+
+**Decisão:** `cuidadores.pin_hash` guarda bcrypt (pgcrypto: `crypt` +
+`gen_salt('bf', 10)`), com salt por cuidador embutido no próprio hash. O hash
+é gerado apenas no banco (`fn_hash_pin`, exposta só ao `service_role`; troca
+de PIN pelo app via RPC `definir_pin`) e verificado apenas no banco (RPC
+`abrir_turno`, SECURITY DEFINER). Os papéis de API perdem o acesso à coluna:
+grants por coluna deixam `authenticated` ler somente `id, nome, ativo,
+criado_em` e alterar somente `nome, ativo`. PIN aceito: 4 a 6 dígitos.
+
+**Racional:** PIN de 4 dígitos é força-bruta trivial offline — a defesa real
+é o hash nunca sair do banco (nem para comparação) combinado com o rate limit
+da DEC-021. bcrypt custa ~0,1 s por verificação, irrelevante no login e caro
+o suficiente para varredura.
+
+**Alternativas descartadas:** hash no cliente (expõe o hash e permite replay);
+SHA-256 com salt (rápido demais para PIN curto); Argon2 (não disponível no
+pgcrypto do Supabase sem extensão adicional).
+
+---
+
+## DEC-021 — Rate limit de PIN: 5 falhas / 15 minutos por cuidador
+**Data:** 2026-07-16 | **Status:** aprovada (tomada na Sessão #2)
+
+**Decisão:** toda tentativa (sucesso ou falha) é registrada em
+`tentativas_pin` — tabela sem nenhum acesso dos papéis de API (RLS habilitado
+sem políticas + grants revogados). Quando as 5 falhas mais recentes do
+cuidador cabem numa janela móvel de 15 minutos, `abrir_turno` recusa novas
+tentativas e informa o horário de desbloqueio (a falha mais antiga das 5 + 15
+min). A resposta de falha informa quantas tentativas restam.
+
+**Racional:** no pior caso o atacante testa 480 PINs/dia por cuidador (~21
+dias para varrer 10.000 combinações), em um dispositivo que fica dentro da
+casa — risco aceitável para o piloto. A tabela serve também de trilha de
+auditoria de acesso.
+
+---
+
+## DEC-022 — Turno único aberto; abertura e fechamento apenas por RPC
+**Data:** 2026-07-16 | **Status:** aprovada (tomada na Sessão #2)
+
+**Decisão:** índice único parcial garante no máximo UM turno aberto (`fim IS
+NULL`) — coerente com o dispositivo único da casa (DEC-002). O cliente perde
+INSERT/UPDATE em `turnos`: abrir passa obrigatoriamente por `abrir_turno`
+(PIN + rate limit; reabrir com o mesmo cuidador retoma o turno existente) e
+fechar por `fechar_turno`, que recusa o fechamento enquanto existir dose
+devida sem tratativa (DEC-010) — inclusive dose ainda dentro da janela de
+tolerância de 30 min. Um trigger em `administracoes` exige turno aberto do
+cuidador informado: nenhuma ação é gravada em nome de quem não detém o turno
+(DEC-019). A constraint `turnos_fim_apos_inicio` passou a aceitar `fim =
+inicio` (turno aberto e fechado no mesmo instante — `now()` é fixo por
+transação).
+
+**Racional:** se o fechamento obrigatório pudesse ser contornado com um
+UPDATE direto, a garantia de acurácia do ledger (proposta de valor central)
+seria decorativa. As RPCs são o único caminho de escrita.
+
+---
+
+## DEC-023 — Dose de ronda ancorada em `prevista_em`; fuso fixo da casa
+**Data:** 2026-07-16 | **Status:** aprovada (tomada na Sessão #2)
+
+**Decisão:** `administracoes.prevista_em` (timestamptz) registra o instante
+agendado do slot tratado (dia + `horarios.hora` no fuso da casa). UNIQUE
+`(horario_id, prevista_em)` impede dupla tratativa do mesmo slot; NULL em
+ambos identifica dose avulsa (DEC-014); o campo é imutável como os demais da
+auditoria (DEC-017). A agenda do turno tem fonte única no banco — RPC
+`doses_do_turno` (slots devidos × tratativas, com situação
+tratada/pendente/atrasada calculada com a tolerância de 30 min) — usada pela
+tela da ronda e pelo `fechar_turno`. O fuso é fixo em `America/Sao_Paulo`
+(`fn_fuso_casa`), suficiente para o piloto de casa única.
+
+**Racional:** casar administração com slot por data de registro quebraria em
+registro tardio e turno cruzando meia-noite; a âncora explícita torna
+"dose sem tratativa" uma consulta exata e dá a unicidade que falta contra
+duplo registro. Em registro tardio de dose tomada no horário, o app envia
+`registrado_em = prevista_em`, mantendo a baixa datada no momento real
+(DEC-008).

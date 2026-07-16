@@ -5,6 +5,8 @@
   --cor-texto-suave: #64748b;
   --cor-ok: #16a34a;
   --cor-erro: #dc2626;
+  --cor-alerta: #b45309;
+  --cor-alerta-fundo: #fffbeb;
 }
 
 * {
@@ -102,4 +104,379 @@ body {
 .status-carregando {
   color: var(--cor-texto-suave);
   background: #f1f5f9;
+}
+
+/* ---- cabeçalho / turno ---- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.turno-badge {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---- formulários e botões ---- */
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.formulario label,
+.campo-observacao {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cor-texto-suave);
+}
+
+.formulario input,
+.campo-observacao textarea {
+  font: inherit;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: var(--cor-texto);
+}
+
+.botao-primario,
+.botao-perigo,
+.botao-secundario {
+  font: inherit;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.botao-primario {
+  background: var(--cor-primaria);
+  color: #fff;
+}
+
+.botao-perigo {
+  background: var(--cor-erro);
+  color: #fff;
+  width: 100%;
+}
+
+.botao-secundario {
+  background: #e2e8f0;
+  color: var(--cor-texto);
+}
+
+.botao-primario:disabled,
+.botao-perigo:disabled,
+.botao-secundario:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aviso {
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+}
+
+.aviso-erro {
+  color: var(--cor-erro);
+  background: #fef2f2;
+}
+
+/* ---- assumir turno ---- */
+
+.lista-cuidadores {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.botao-cuidador {
+  font: inherit;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.875rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.botao-voltar {
+  font: inherit;
+  font-size: 0.8125rem;
+  border: none;
+  background: none;
+  color: var(--cor-primaria);
+  padding: 0;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+}
+
+.teclado-pin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.pin-pontos {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.pin-ponto {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+}
+
+.pin-ponto.preenchido {
+  background: var(--cor-primaria);
+  border-color: var(--cor-primaria);
+}
+
+.teclado-grade {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 260px;
+}
+
+.tecla {
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  padding: 0.875rem 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.tecla-ok {
+  background: var(--cor-primaria);
+  border-color: var(--cor-primaria);
+  color: #fff;
+}
+
+.tecla:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- ronda ---- */
+
+.secao {
+  margin-bottom: 1rem;
+}
+
+.secao h2 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--cor-texto-suave);
+  margin-bottom: 0.5rem;
+}
+
+.secao-atrasadas h2 {
+  color: var(--cor-erro);
+}
+
+.slot {
+  padding: 0.75rem;
+}
+
+.slot-hora {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.dose {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--cor-texto);
+  cursor: pointer;
+  position: relative;
+}
+
+.dose + .dose {
+  margin-top: 0.5rem;
+}
+
+.dose-atrasada {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.dose-idoso {
+  font-weight: 700;
+}
+
+.dose-medicamento {
+  font-size: 0.875rem;
+  color: var(--cor-texto-suave);
+}
+
+.dose-acao {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--cor-primaria);
+}
+
+.lista-tratadas {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lista-tratadas li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+.chip {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.chip-tomado_no_horario {
+  color: var(--cor-ok);
+  background: #f0fdf4;
+}
+
+.chip-tomado_atrasado {
+  color: var(--cor-alerta);
+  background: var(--cor-alerta-fundo);
+}
+
+.chip-nao_tomado,
+.chip-recusado {
+  color: var(--cor-erro);
+  background: #fef2f2;
+}
+
+.card-sos p {
+  font-size: 0.8125rem;
+}
+
+.secao-encerrar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.nota-encerrar {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+  text-align: center;
+}
+
+/* ---- modal de tratativa ---- */
+
+.modal-fundo {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modal h3 {
+  font-size: 1.0625rem;
+}
+
+.modal-medicamento {
+  font-size: 0.875rem;
+  color: var(--cor-texto-suave);
+}
+
+.opcoes-tratativa {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.opcao {
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.opcao-ativa {
+  border-color: var(--cor-primaria);
+  background: #f0fdfa;
+  color: var(--cor-primaria);
+}
+
+.modal-acoes {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.modal-acoes .botao-primario {
+  flex: 1;
 }

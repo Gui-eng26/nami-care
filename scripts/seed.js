@@ -9,7 +9,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY    — service role key (ignora RLS; nunca no frontend)
 
 import { createClient } from '@supabase/supabase-js'
-import { cuidadores, idosos, medicamentos, hashPin } from './seed-data.js'
+import { cuidadores, idosos, medicamentos } from './seed-data.js'
 
 const url = process.env.VITE_SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -39,6 +39,7 @@ async function resetar() {
     'horarios',
     'medicamentos',
     'idosos',
+    'tentativas_pin',
     'turnos',
     'cuidadores'
   ]) {
@@ -63,10 +64,20 @@ async function main() {
     process.exit(1)
   }
 
-  // Cuidadores
+  // Cuidadores — o hash de PIN é sempre gerado no banco (bcrypt via
+  // fn_hash_pin, DEC-020); o seed nunca calcula hash localmente.
+  const linhasCuidadores = []
+  for (const c of cuidadores) {
+    const { data: pinHash, error: erroHash } = await supabase.rpc('fn_hash_pin', {
+      p_pin: c.pin
+    })
+    if (erroHash) falhar(`gerar hash do PIN de ${c.nome}`, erroHash)
+    linhasCuidadores.push({ nome: c.nome, pin_hash: pinHash })
+  }
+
   const { data: cuidadoresInseridos, error: erroCuidadores } = await supabase
     .from('cuidadores')
-    .insert(cuidadores.map((c) => ({ nome: c.nome, pin_hash: hashPin(c.pin) })))
+    .insert(linhasCuidadores)
     .select('id, nome')
   if (erroCuidadores) falhar('inserir cuidadores', erroCuidadores)
   const cuidadorSeed = cuidadoresInseridos[0]

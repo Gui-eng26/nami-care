@@ -62,9 +62,3 @@ export const medicamentos = [
   { idoso: 'Lourdes Quintana', nome: 'Losartana', dosagem: '50 mg', forma: 'comprimido', posologia: '1 comprimido pela manhã', tipo: 'continuo', horarios: [['08:00', 1]], estoqueInicial: 30 },
   { idoso: 'Lourdes Quintana', nome: 'Hidroclorotiazida', dosagem: '25 mg', forma: 'comprimido', posologia: '1 comprimido pela manhã', tipo: 'continuo', horarios: [['08:00', 1]], estoqueInicial: 30 }
 ]
-
-// Hash provisório do PIN (SHA-256 hex) — formato definitivo na Sessão #2.
-import { createHash } from 'node:crypto'
-export function hashPin(pin) {
-  return createHash('sha256').update(pin).digest('hex')
-}
