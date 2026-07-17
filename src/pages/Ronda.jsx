@@ -173,7 +173,7 @@ export default function Ronda({ turno, onTurnoFechado }) {
         <div className="card card-sos">
           <p>
             <strong>Dose avulsa (SOS)</strong> — registro de medicamento sem horário fixo
-            chega na Sessão #3 (fora da ronda).
+            chega na Sessão #4 (fora da ronda).
           </p>
         </div>
       </section>

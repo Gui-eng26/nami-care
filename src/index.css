@@ -1,8 +1,18 @@
+/* Identidade visual — Residencial Senior Sereníssima (Sessão #3).
+   Dourado sobre creme; contraste é requisito: o dourado puro (#B08D4A) só
+   aparece em destaques e superfícies grandes — texto pequeno usa as versões
+   escurecidas. Cores funcionais (ok/erro/alerta) intactas: legibilidade
+   operacional vem antes de estética. */
 :root {
-  --cor-primaria: #0f766e;
-  --cor-fundo: #f8fafc;
-  --cor-texto: #1e293b;
-  --cor-texto-suave: #64748b;
+  --cor-primaria: #b08d4a;
+  --cor-primaria-escura: #8f7038;
+  --cor-primaria-texto: #7c6132;
+  --cor-fundo: #faf6ee;
+  --cor-superficie: #ffffff;
+  --cor-texto: #3d3428;
+  --cor-texto-suave: #6e6151;
+  --cor-borda: #e7ddc8;
+  --cor-fundo-suave: #f6f0e2;
   --cor-ok: #16a34a;
   --cor-erro: #dc2626;
   --cor-alerta: #b45309;
@@ -31,7 +41,8 @@ body {
 }
 
 .app-header {
-  background: var(--cor-primaria);
+  background: var(--cor-primaria-escura);
+  border-bottom: 3px solid var(--cor-primaria);
   color: #fff;
   padding: 1.25rem 1rem 1rem;
   padding-top: calc(1.25rem + env(safe-area-inset-top));
@@ -40,11 +51,12 @@ body {
 .app-header h1 {
   font-size: 1.375rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .app-header p {
   font-size: 0.8125rem;
-  opacity: 0.85;
+  opacity: 0.92;
   margin-top: 0.125rem;
 }
 
@@ -54,8 +66,8 @@ body {
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 0.75rem;
@@ -103,7 +115,7 @@ body {
 
 .status-carregando {
   color: var(--cor-texto-suave);
-  background: #f1f5f9;
+  background: var(--cor-fundo-suave);
 }
 
 /* ---- cabeçalho / turno ---- */
@@ -115,13 +127,32 @@ body {
   gap: 0.75rem;
 }
 
+.app-header-acoes {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .turno-badge {
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
   padding: 0.25rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.botao-header {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
   white-space: nowrap;
 }
 
@@ -145,12 +176,38 @@ body {
 }
 
 .formulario input,
+.formulario select,
+.formulario textarea,
 .campo-observacao textarea {
   font: inherit;
   padding: 0.625rem 0.75rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #d6c9ac;
   border-radius: 8px;
   color: var(--cor-texto);
+  background: var(--cor-superficie);
+}
+
+.formulario-linha {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.formulario-linha > label {
+  flex: 1;
+}
+
+.formulario .campo-opcao {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--cor-texto);
+}
+
+.formulario .campo-opcao input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--cor-primaria-escura);
 }
 
 .botao-primario,
@@ -165,8 +222,12 @@ body {
 }
 
 .botao-primario {
-  background: var(--cor-primaria);
+  background: var(--cor-primaria-escura);
   color: #fff;
+}
+
+.botao-primario:active {
+  background: var(--cor-primaria-texto);
 }
 
 .botao-perigo {
@@ -176,7 +237,8 @@ body {
 }
 
 .botao-secundario {
-  background: #e2e8f0;
+  background: var(--cor-fundo-suave);
+  border: 1px solid var(--cor-borda);
   color: var(--cor-texto);
 }
 
@@ -198,6 +260,11 @@ body {
   background: #fef2f2;
 }
 
+.aviso-ok {
+  color: var(--cor-ok);
+  background: #f0fdf4;
+}
+
 /* ---- assumir turno ---- */
 
 .lista-cuidadores {
@@ -213,9 +280,9 @@ body {
   font-weight: 600;
   text-align: left;
   padding: 0.875rem 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cor-borda);
   border-radius: 10px;
-  background: #f8fafc;
+  background: #fbf7ef;
   color: var(--cor-texto);
   cursor: pointer;
 }
@@ -223,9 +290,10 @@ body {
 .botao-voltar {
   font: inherit;
   font-size: 0.8125rem;
+  font-weight: 700;
   border: none;
   background: none;
-  color: var(--cor-primaria);
+  color: var(--cor-primaria-texto);
   padding: 0;
   margin-bottom: 0.5rem;
   cursor: pointer;
@@ -248,7 +316,7 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid #cbd5e1;
+  border: 2px solid #d6c9ac;
 }
 
 .pin-ponto.preenchido {
@@ -269,16 +337,16 @@ body {
   font-size: 1.25rem;
   font-weight: 600;
   padding: 0.875rem 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cor-borda);
   border-radius: 10px;
-  background: #fff;
+  background: var(--cor-superficie);
   color: var(--cor-texto);
   cursor: pointer;
 }
 
 .tecla-ok {
-  background: var(--cor-primaria);
-  border-color: var(--cor-primaria);
+  background: var(--cor-primaria-escura);
+  border-color: var(--cor-primaria-escura);
   color: #fff;
 }
 
@@ -323,9 +391,9 @@ body {
   width: 100%;
   text-align: left;
   padding: 0.625rem 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cor-borda);
   border-radius: 10px;
-  background: #f8fafc;
+  background: #fbf7ef;
   color: var(--cor-texto);
   cursor: pointer;
   position: relative;
@@ -356,7 +424,7 @@ body {
   transform: translateY(-50%);
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--cor-primaria);
+  color: var(--cor-primaria-texto);
 }
 
 .lista-tratadas {
@@ -399,6 +467,21 @@ body {
   background: #fef2f2;
 }
 
+.chip-admin {
+  color: var(--cor-primaria-texto);
+  background: #f3ead3;
+}
+
+.chip-inativo {
+  color: var(--cor-texto-suave);
+  background: var(--cor-fundo-suave);
+}
+
+.chip-sos {
+  color: var(--cor-alerta);
+  background: var(--cor-alerta-fundo);
+}
+
 .card-sos p {
   font-size: 0.8125rem;
 }
@@ -421,7 +504,7 @@ body {
 .modal-fundo {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(61, 52, 40, 0.55);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -429,11 +512,13 @@ body {
 }
 
 .modal {
-  background: #fff;
+  background: var(--cor-superficie);
   border-radius: 16px 16px 0 0;
   padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 480px;
+  max-height: 90dvh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -459,17 +544,17 @@ body {
   font-weight: 600;
   text-align: left;
   padding: 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cor-borda);
   border-radius: 10px;
-  background: #fff;
+  background: var(--cor-superficie);
   color: var(--cor-texto);
   cursor: pointer;
 }
 
 .opcao-ativa {
-  border-color: var(--cor-primaria);
-  background: #f0fdfa;
-  color: var(--cor-primaria);
+  border-color: var(--cor-primaria-escura);
+  background: #f7efdd;
+  color: var(--cor-texto);
 }
 
 .modal-acoes {
@@ -479,4 +564,124 @@ body {
 
 .modal-acoes .botao-primario {
   flex: 1;
+}
+
+/* ---- gestão ---- */
+
+.abas {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.aba {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex: 1;
+  padding: 0.625rem 0.5rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+  background: var(--cor-superficie);
+  color: var(--cor-texto-suave);
+  cursor: pointer;
+}
+
+.aba-ativa {
+  background: var(--cor-primaria-escura);
+  border-color: var(--cor-primaria-escura);
+  color: #fff;
+}
+
+.lista-gestao {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item-gestao {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+  background: #fbf7ef;
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.item-gestao-nome {
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.item-gestao-detalhe {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--cor-texto-suave);
+}
+
+.item-gestao-chips {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.item-inativo {
+  opacity: 0.6;
+}
+
+.acoes-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.botao-mini {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: var(--cor-superficie);
+  color: var(--cor-primaria-texto);
+  cursor: pointer;
+}
+
+.botao-mini:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.botao-mini-perigo {
+  color: var(--cor-erro);
+}
+
+.gestao-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.gestao-cabecalho h2 {
+  font-size: 1rem;
+}
+
+.gestao-admin-nota {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+  margin-bottom: 0.75rem;
 }

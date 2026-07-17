@@ -23,10 +23,10 @@ export default function LoginCasa() {
 
   return (
     <div className="card">
-      <h2>Entrar — conta da casa</h2>
+      <h2>Residencial Senior Sereníssima</h2>
       <p>
-        Use as credenciais da casa de repouso. Este login é feito uma única vez
-        neste aparelho; a troca de cuidador é pelo PIN do turno.
+        Entre com as credenciais da casa. Este login é feito uma única vez
+        neste aparelho; a troca de cuidadora é pelo PIN do turno.
       </p>
       <form className="formulario" onSubmit={entrar}>
         <label>

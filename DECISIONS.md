@@ -159,7 +159,10 @@ principal; botão "encerrar turno" bloqueado enquanto houver pendências.
 ---
 
 ## DEC-011 — Sem perfil admin no MVP
-**Data:** 2026-07-15 | **Status:** aprovada
+**Data:** 2026-07-15 | **Status:** parcialmente substituída pela DEC-024
+(Sessão #3): permanece válida para a **operação** (ronda, tratativas, estoque);
+os **cadastros** (cuidadoras, residentes, medicamentos, horários) passaram a
+exigir administradora.
 
 **Decisão:** Todos os cuidadores podem cadastrar e editar idosos, medicamentos e
 horários.
@@ -361,3 +364,85 @@ registro tardio e turno cruzando meia-noite; a âncora explícita torna
 duplo registro. Em registro tardio de dose tomada no horário, o app envia
 `registrado_em = prevista_em`, mantendo a baixa datada no momento real
 (DEC-008).
+
+---
+
+## DEC-024 — Acesso à gestão: administradora com PIN verificado a cada RPC
+**Data:** 2026-07-16 | **Status:** aprovada (Sessão #3; substitui parcialmente a DEC-011)
+
+**Decisão:** `cuidadores.eh_admin` marca quem é administradora. A área de
+gestão (cadastro/edição de cuidadoras, residentes, medicamentos e
+prescrições) só funciona com credencial de administradora: **cada RPC de
+gestão recebe `p_admin_id + p_admin_pin`** e valida no banco
+(`fn_autorizar_admin`: bcrypt da DEC-020 + rate limit da DEC-021 + trilha em
+`tentativas_pin`). Não há sessão de gestão no servidor — o app pede o PIN ao
+entrar na área de gestão, guarda-o apenas em memória e o reenvia a cada
+chamada. A **operação** do turno (assumir turno, tratativas da ronda, futuras
+dose SOS e movimentações de estoque) continua aberta a toda cuidadora — a
+DEC-011 permanece válida para operação e deixa de valer para cadastros.
+
+**Racional / prós:** enforcement real no servidor (esconder botão no cliente
+seria furável pelo console do navegador); toda ação de gestão fica auditada
+em `tentativas_pin`; reusa o PIN existente (nenhuma credencial nova);
+múltiplas administradoras possíveis (flag por cadastro). Mexer em prescrição
+é ato clínico-administrativo — o erro mais grave possível do sistema — e a
+cliente (Thais) é a gestora natural desses cadastros.
+
+**Contras aceitos:** digitar o PIN ao entrar na gestão (1× por sessão de
+tela); um cadastro urgente fora do expediente da administradora depende de
+outra admin ou espera (mitigável criando uma segunda admin).
+
+**Alternativas descartadas:** gate apenas no cliente (sem segurança real);
+token de sessão de gestão no servidor (complexidade sem ganho no dispositivo
+único); manter DEC-011 também para cadastros (proposta original — descartada
+pelo peso clínico de prescrição e pelo risco de troca/desativação de
+cuidadora por qualquer pessoa com o celular na mão).
+
+**Bootstrap:** o seed marca Ana Souza como administradora; a criação da
+administradora real (Thais) entra no cadastro de dados reais da Sessão #5.
+
+---
+
+## DEC-025 — Troca de PIN: com PIN atual (self-service) ou por administradora
+**Data:** 2026-07-16 | **Status:** aprovada (Sessão #3)
+
+**Decisão:** dois caminhos, ambos server-side: **`trocar_pin(cuidador, pin_atual,
+pin_novo)`** — a própria cuidadora, validando o PIN atual (com o rate limit da
+DEC-021, para não virar oráculo de força bruta); e **`redefinir_pin(admin,
+pin_admin, cuidador, pin_novo)`** — reset por administradora para caso de
+esquecimento (DEC-024). A RPC `definir_pin` da Sessão #2, que trocava PIN
+**sem verificação nenhuma**, foi removida (qualquer authenticated podia trocar
+o PIN de qualquer cuidadora — registrado como BUG-001).
+
+**Racional:** troca de PIN sem prova de posse permitiria a qualquer pessoa com
+o celular assumir a identidade de outra cuidadora — quebraria a trilha de
+auditoria, que é a razão de existir do PIN (DEC-019).
+
+---
+
+## DEC-026 — Prescrição versionada: campos clínicos imutáveis após uso
+**Data:** 2026-07-16 | **Status:** aprovada (Sessão #3)
+
+**Decisão:** depois que um medicamento/horário tem administração registrada,
+os campos que dão significado clínico ao histórico ficam **imutáveis**:
+em `medicamentos`, `nome`, `dosagem` e `forma_farmaceutica`; em `horarios`,
+`hora` e `qtd_dose`. Alterar prescrição = **desativar a linha antiga e criar
+uma nova** (versão): a RPC `atualizar_horario` faz isso automaticamente quando
+há histórico (e edita in-place quando ainda não há — janela para corrigir erro
+de digitação); mudança de dose/dosagem de medicamento vira novo medicamento
+pela UI. Triggers no banco (`fn_medicamento_imutavel_apos_uso`,
+`fn_horario_imutavel_apos_uso`) garantem a regra por qualquer caminho de
+escrita, não só pelas RPCs. `posologia` (texto de orientação) permanece sempre
+editável. Índice único parcial `(medicamento_id, hora) where ativo` impede
+horários duplicados ativos.
+
+**Racional:** `administracoes` copia `qtd` e ancora `prevista_em`, mas nome e
+dosagem do medicamento são lidos por join — reescrevê-los reescreveria a
+leitura de todo o histórico de administrações (violaria DEC-017). A linha
+antiga desativada preserva a leitura fiel; a nova linha passa a gerar os slots
+da ronda dali em diante.
+
+**Alternativas descartadas:** tabela de versões de prescrição separada
+(complexidade de schema sem ganho — a linha desativada JÁ é a versão);
+copiar nome/dosagem para dentro de `administracoes` (desnormalização que
+incharia a tabela de maior volume do sistema).

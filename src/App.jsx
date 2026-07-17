@@ -3,12 +3,16 @@ import { supabase } from './lib/supabase.js'
 import LoginCasa from './pages/LoginCasa.jsx'
 import AssumirTurno from './pages/AssumirTurno.jsx'
 import Ronda from './pages/Ronda.jsx'
+import Gestao from './pages/Gestao.jsx'
 
 // Estados: sessão do usuário Supabase da casa (DEC-019) e turno aberto (PIN).
 // undefined = ainda carregando; null = não existe.
+// gestao: área de cadastros, protegida por PIN de administradora (DEC-024) —
+// acessível com ou sem turno aberto.
 export default function App() {
   const [sessao, setSessao] = useState(undefined)
   const [turno, setTurno] = useState(undefined)
+  const [gestao, setGestao] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessao(data.session))
@@ -40,7 +44,10 @@ export default function App() {
 
   useEffect(() => {
     if (sessao) carregarTurnoAberto()
-    else if (sessao === null) setTurno(undefined)
+    else if (sessao === null) {
+      setTurno(undefined)
+      setGestao(false)
+    }
   }, [sessao, carregarTurnoAberto])
 
   let conteudo
@@ -52,6 +59,8 @@ export default function App() {
     )
   } else if (!sessao) {
     conteudo = <LoginCasa />
+  } else if (gestao) {
+    conteudo = <Gestao onSair={() => { setGestao(false); carregarTurnoAberto() }} />
   } else if (!turno) {
     conteudo = <AssumirTurno onTurnoAberto={setTurno} />
   } else {
@@ -62,10 +71,24 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="app-header-titulo">
-          <h1>Nami Care</h1>
-          <p>Gestão de medicação — casa de repouso</p>
+          <h1>Sereníssima</h1>
+          <p>Gestão de medicação</p>
         </div>
-        {turno && <span className="turno-badge">{turno.cuidador_nome}</span>}
+        <div className="app-header-acoes">
+          {!gestao && turno && <span className="turno-badge">{turno.cuidador_nome}</span>}
+          {sessao && turno !== undefined && (
+            <button
+              type="button"
+              className="botao-header"
+              onClick={() => {
+                if (gestao) carregarTurnoAberto()
+                setGestao(!gestao)
+              }}
+            >
+              {gestao ? '‹ Sair da gestão' : 'Gestão'}
+            </button>
+          )}
+        </div>
       </header>
       <main className="app-main">{conteudo}</main>
     </div>

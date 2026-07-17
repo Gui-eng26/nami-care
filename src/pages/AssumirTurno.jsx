@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { mensagemErro } from '../lib/erros.js'
 import TecladoPin from '../components/TecladoPin.jsx'
 
 // Assumir turno no dispositivo compartilhado (DEC-002/DEC-019): o cuidador
@@ -9,6 +10,7 @@ export default function AssumirTurno({ onTurnoAberto }) {
   const [cuidadores, setCuidadores] = useState(null)
   const [selecionado, setSelecionado] = useState(null)
   const [aviso, setAviso] = useState(null)
+  const [trocandoPin, setTrocandoPin] = useState(false)
 
   useEffect(() => {
     supabase
@@ -33,23 +35,10 @@ export default function AssumirTurno({ onTurnoAberto }) {
       onTurnoAberto(data.turno)
       return
     }
-    if (data.erro === 'pin_incorreto') {
-      setAviso(
-        data.tentativas_restantes > 0
-          ? `PIN incorreto. ${data.tentativas_restantes} tentativa(s) antes do bloqueio.`
-          : 'PIN incorreto. Próxima tentativa só após o desbloqueio.'
-      )
-    } else if (data.erro === 'pin_bloqueado') {
-      const hora = new Date(data.desbloqueia_em).toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'America/Sao_Paulo'
-      })
-      setAviso(`Muitas tentativas erradas. Bloqueado até ${hora}.`)
-    } else if (data.erro === 'turno_aberto_outro_cuidador') {
+    if (data.erro === 'turno_aberto_outro_cuidador') {
       setAviso('Outro cuidador abriu um turno agora há pouco. Recarregue a tela.')
     } else {
-      setAviso('Não foi possível abrir o turno.')
+      setAviso(mensagemErro(data))
     }
   }
 
@@ -77,6 +66,15 @@ export default function AssumirTurno({ onTurnoAberto }) {
     )
   }
 
+  if (trocandoPin) {
+    return (
+      <TrocarPin
+        cuidador={selecionado}
+        onVoltar={() => setTrocandoPin(false)}
+      />
+    )
+  }
+
   return (
     <div className="card">
       <button
@@ -91,6 +89,97 @@ export default function AssumirTurno({ onTurnoAberto }) {
       </button>
       <h2>PIN de {selecionado.nome}</h2>
       <TecladoPin onConfirmar={confirmarPin} aviso={aviso} />
+      <div className="acoes-item">
+        <button
+          type="button"
+          className="botao-mini"
+          onClick={() => {
+            setAviso(null)
+            setTrocandoPin(true)
+          }}
+        >
+          Trocar meu PIN
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Troca de PIN self-service (DEC-025): exige o PIN atual, verificado no banco
+// com o mesmo rate limit do login. Esquecimento = administradora redefine na
+// área de gestão.
+function TrocarPin({ cuidador, onVoltar }) {
+  const [pinAtual, setPinAtual] = useState('')
+  const [pinNovo, setPinNovo] = useState('')
+  const [aviso, setAviso] = useState(null)
+  const [ocupado, setOcupado] = useState(false)
+
+  async function salvar(evento) {
+    evento.preventDefault()
+    setOcupado(true)
+    setAviso(null)
+    const { data, error } = await supabase.rpc('trocar_pin', {
+      p_cuidador_id: cuidador.id,
+      p_pin_atual: pinAtual,
+      p_pin_novo: pinNovo
+    })
+    setOcupado(false)
+    if (error) {
+      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      return
+    }
+    if (!data.ok) {
+      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      return
+    }
+    setPinAtual('')
+    setPinNovo('')
+    setAviso({ tipo: 'ok', texto: 'PIN trocado. Use o novo PIN para assumir o turno.' })
+  }
+
+  return (
+    <div className="card">
+      <button type="button" className="botao-voltar" onClick={onVoltar}>
+        ← Voltar
+      </button>
+      <h2>Trocar o PIN de {cuidador.nome}</h2>
+      <p>Se esqueceu o PIN atual, peça à administradora para redefinir na Gestão.</p>
+      <form className="formulario" onSubmit={salvar}>
+        <label>
+          PIN atual
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]{4,6}"
+            minLength={4}
+            maxLength={6}
+            value={pinAtual}
+            onChange={(e) => setPinAtual(e.target.value.replace(/\D/g, ''))}
+            required
+          />
+        </label>
+        <label>
+          Novo PIN (4 a 6 dígitos)
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]{4,6}"
+            minLength={4}
+            maxLength={6}
+            value={pinNovo}
+            onChange={(e) => setPinNovo(e.target.value.replace(/\D/g, ''))}
+            required
+          />
+        </label>
+        {aviso && (
+          <p className={`aviso ${aviso.tipo === 'ok' ? 'aviso-ok' : 'aviso-erro'}`}>
+            {aviso.texto}
+          </p>
+        )}
+        <button type="submit" className="botao-primario" disabled={ocupado}>
+          {ocupado ? 'Trocando…' : 'Trocar PIN'}
+        </button>
+      </form>
     </div>
   )
 }

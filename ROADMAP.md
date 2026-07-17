@@ -35,25 +35,31 @@ do todo; em caso de conflito com DECISIONS.md, o DECISIONS prevalece.
 Protection no dashboard do Auth · testar no celular da casa (depende do
 deploy, Sessão 5).
 
-## Sessão 3 — Gestão de cadastros 🔜
+## Sessão 3 — Gestão de cadastros ✅ (2026-07-16)
 
-Transforma o sistema de "demo com dados do seed" em sistema que a casa
+Transformou o sistema de "demo com dados do seed" em sistema que a casa
 administra sozinha.
 
-- **RPC `criar_cuidador`(nome, pin):** faz o hash internamente via
-  `fn_hash_pin` e insere a linha completa — necessária porque o cliente
-  não tem mais acesso a `pin_hash`. Risco já mapeado no relatório da
-  Sessão 2. Incluir também troca de PIN e desativação (nunca exclusão:
-  cuidador com histórico de administrações não pode sumir do ledger de
-  auditoria).
-- **Cadastro/edição de residentes:** hoje só existem via seed.
-- **Cadastro/edição de medicamentos e prescrições:** medicamento, dose,
-  horários das rondas, flag SOS/PRN.
-- Definir quem acessa a gestão (todas as cuidadoras? só a Thais?) —
-  provável DEC nova: um "PIN de administradora" ou papel diferenciado.
+- Acesso à gestão: flag `eh_admin` + PIN de administradora validado no
+  banco em cada RPC de gestão (DEC-024, substitui parcialmente DEC-011).
+- Gestão de cuidadoras 100% por RPC (`criar_cuidador` com hash no banco,
+  `atualizar_cuidador`, `definir_ativo_cuidador`); troca de PIN com
+  verificação do atual ou por administradora (DEC-025); `definir_pin` sem
+  verificação removida (BUG-001).
+- Residentes com soft delete (`idosos.ativo`) e RPCs próprias;
+  `doses_do_turno` ignora residente desativado.
+- Prescrições versionadas (DEC-026): campos clínicos imutáveis após a
+  primeira administração (triggers); editar horário com histórico
+  desativa a linha antiga e cria a versão nova.
+- Identidade visual Sereníssima aplicada em todas as telas + manifest.
 
-**Critério de pronto:** conseguir cadastrar as 4 cuidadoras reais e os 11
-residentes reais da casa sem tocar no banco na mão.
+**Critério de pronto atingido:** cadastro completo (cuidadora com PIN,
+residente, medicamento com horário fracionado) feito pelo navegador, sem
+tocar no banco na mão — verificado no ciclo completo + testes SQL.
+
+**Pendências pós-sessão:** commit + push · bootstrap da admin real (Thais)
+fica para o cadastro de dados reais (Sessão 5) · MH-001 (unificar a
+verificação de PIN duplicada em `abrir_turno`).
 
 ## Sessão 4 — Estoque e SOS (a dor nº 1) 🔜
 

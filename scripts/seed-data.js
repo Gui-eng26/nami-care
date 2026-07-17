@@ -3,8 +3,10 @@
 // ~25 medicamentos com horários que colidem de propósito (08:00, 12:00, 20:00)
 // para exercitar a rodada de medicação.
 
+// admin: acesso à área de gestão (DEC-024). A administradora real (Thais)
+// será criada no cadastro dos dados reais (Sessão #5).
 export const cuidadores = [
-  { nome: 'Ana Souza', pin: '1111' },
+  { nome: 'Ana Souza', pin: '1111', admin: true },
   { nome: 'Beatriz Lima', pin: '2222' },
   { nome: 'Carlos Pereira', pin: '3333' },
   { nome: 'Débora Santos', pin: '4444' }

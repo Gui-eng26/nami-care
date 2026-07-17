@@ -1,11 +1,39 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-16 (fim da Sessão #2)
+> Última atualização: 2026-07-16 (fim da Sessão #3)
 
 ## Onde estamos
 
 **Fase atual:** Fase 3 — Implementação via Claude Code (em andamento)
+
+**Sessão #3 (2026-07-16) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_03.md`. Entregas:
+- [x] Acesso à gestão (DEC-024, substitui parcialmente DEC-011): flag
+      `eh_admin` + PIN de administradora validado NO BANCO em cada RPC de
+      gestão (`fn_autorizar_admin`; rate limit da DEC-021; trilha em
+      `tentativas_pin`); porta de entrada `autorizar_gestao`
+- [x] Gestão de cuidadoras por RPC (único caminho — escrita direta
+      revogada): `criar_cuidador` (hash só no banco), `atualizar_cuidador`,
+      `definir_ativo_cuidador` (nunca exclusão); guardas de última admin e
+      turno aberto
+- [x] Troca de PIN (DEC-025): `trocar_pin` (exige PIN atual) e
+      `redefinir_pin` (por admin); `definir_pin` removida (BUG-001 — trocava
+      PIN sem verificação)
+- [x] Residentes: `idosos.ativo` + RPCs criar/atualizar/definir_ativo;
+      `doses_do_turno` ignora residente desativado
+- [x] Prescrições versionadas (DEC-026): triggers de imutabilidade clínica
+      após primeira administração; `atualizar_horario` desativa + cria
+      versão nova quando há histórico; índice único de horário ativo
+- [x] Telas de gestão (Gestao, GestaoCuidadoras, GestaoResidentes com
+      navegação residente → medicamentos → horários) + "Trocar meu PIN" no
+      AssumirTurno
+- [x] Identidade Sereníssima: dourado #B08D4A / creme #FAF6EE / texto
+      #3D3428 nas variáveis globais; "Sereníssima" no cabeçalho, nome
+      completo no login e no manifest (short_name "Sereníssima"); cores
+      funcionais intactas
+- [x] 4 migrations novas (000900–001200) aplicadas e espelhadas; 16 testes
+      SQL + testes de permissão + ciclo completo no navegador; seed com
+      `admin: true` na Ana; banco resetado limpo ao final
 
 **Sessão #2 (2026-07-16) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_02.md`. Entregas:
 - [x] PIN definitivo (DEC-020, substitui DEC-018): bcrypt com salt por
@@ -39,31 +67,34 @@ PWA + 7 tabelas + trigger de baixa (DEC-008) + views de estoque + RLS + seed.
 - Fase 2 — Documentação de projeto (concluída em 2026-07-15): BRIEFING.md v1.2,
   DECISIONS.md, modelo de 7 tabelas, regras de negócio 100% definidas
 
-**Próxima sessão:** **Sessão Claude Code #3** — telas de cadastro (idosos,
-medicamentos, horários — lembrando que cadastro de cuidador exigirá RPC
-própria, pois o cliente não insere `pin_hash`), dose avulsa SOS e
-movimentações manuais de estoque (compra, ajuste por contagem, perda).
+**Próxima sessão:** **Sessão Claude Code #4** — estoque e SOS (a dor nº 1):
+entradas no ledger (compra, ajuste por contagem, perda manuais), visão de
+saldo/cobertura com alerta de reposição (< 5 dias) e fluxo de dose avulsa
+SOS/PRN.
 
 ## Pendências operacionais
 
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_02.md, salvar no Drive, commit + push
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_03.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** habilitar "Leaked Password Protection" no dashboard
-      (Auth) — aviso dos security advisors
+      (Auth) — aviso dos security advisors (pendente desde a Sessão #2)
 - [ ] **Guilherme:** testar o fluxo no celular da casa (login
-      `casa@namicare.app` — senha em `.env.local` — e turno com PIN de teste)
+      `casa@namicare.app` — senha em `.env.local` — e turno com PIN de teste;
+      gestão: Ana Souza, PIN 1111)
 - [ ] Ícones do PWA estão em SVG; gerar PNG 192/512 antes do teste de instalação
-      no celular da casa
+      no celular da casa (o logo real entra na Sessão #5)
 - [ ] Termo LGPD com a casa de repouso ANTES de inserir dados reais
 - [ ] Bloqueio por inatividade (repedir PIN — implicação da DEC-002) ficou
-      fora do MVP desta sessão; reavaliar após o piloto começar
+      fora do MVP; reavaliar após o piloto começar
+- [ ] Bootstrap da administradora real (Thais) por seed/script no cadastro
+      dos dados reais — a gestão exige uma admin já existente (Sessão #5)
 
 ## Próximos passos (ordem sugerida)
 
-1. **Sessão Claude Code #3:** cadastros (idosos, medicamentos, horários,
-   cuidadores via RPC) + dose avulsa SOS + movimentações manuais de estoque
-2. **Sessão Claude Code #4:** relatórios (adesão, estoque, previsão de ruptura)
-3. Deploy do frontend no Railway (DEC-007)
-4. Piloto assistido: 1ª semana com acompanhamento próximo dos 4 cuidadores
+1. **Sessão Claude Code #4:** estoque (entradas, ajuste, perda, saldo,
+   alerta de cobertura) + dose avulsa SOS
+2. **Sessão Claude Code #5:** deploy no Railway, PWA no celular da casa,
+   cadastro dos dados reais
+3. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
 
 ## Convenções deste projeto
 

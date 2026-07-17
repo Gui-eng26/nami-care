@@ -72,7 +72,7 @@ async function main() {
       p_pin: c.pin
     })
     if (erroHash) falhar(`gerar hash do PIN de ${c.nome}`, erroHash)
-    linhasCuidadores.push({ nome: c.nome, pin_hash: pinHash })
+    linhasCuidadores.push({ nome: c.nome, pin_hash: pinHash, eh_admin: Boolean(c.admin) })
   }
 
   const { data: cuidadoresInseridos, error: erroCuidadores } = await supabase

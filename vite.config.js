@@ -9,15 +9,15 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg'],
       manifest: {
-        name: 'Nami Care',
-        short_name: 'Nami Care',
-        description: 'Gestão de medicação para casas de repouso',
+        name: 'Residencial Senior Sereníssima',
+        short_name: 'Sereníssima',
+        description: 'Gestão de medicação — Residencial Senior Sereníssima',
         lang: 'pt-BR',
         start_url: '/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#f8fafc',
-        theme_color: '#0f766e',
+        background_color: '#faf6ee',
+        theme_color: '#8f7038',
         icons: [
           {
             src: '/icons/icon.svg',
