@@ -1,11 +1,35 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-16 (fim da Sessão #3)
+> Última atualização: 2026-07-17 (fim da Sessão #4)
 
 ## Onde estamos
 
 **Fase atual:** Fase 3 — Implementação via Claude Code (em andamento)
+
+**Sessão #4 (2026-07-17) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_04.md`. Entregas:
+- [x] Ledger completo (DEC-004 fechada de ponta a ponta): RPCs
+      `registrar_entrada_estoque`, `registrar_ajuste_estoque` (contagem
+      física → diferença calculada e gravada no banco, nunca sobrescrita)
+      e `registrar_perda_estoque` (motivo obrigatório); todas gravam o
+      cuidador do turno aberto; INSERT direto em `movimentacoes_estoque`
+      revogado (trigger de baixa virou SECURITY DEFINER)
+- [x] Alerta de reposição (DEC-027): contínuo = cobertura determinística
+      pela prescrição ativa (< 5 dias, DEC-012) + sugestão de compra p/
+      30 dias (DEC-028); SOS = `estoque_minimo` por medicamento (campo
+      novo, exposto no cadastro da gestão e no seed); view
+      `cobertura_estoque` redefinida (média móvel de 14 dias descartada)
+- [x] Tela de estoque (DEC-029): abas Ronda | Estoque; lista por
+      residente com seção "Repor" no topo; ficha por medicamento com
+      extrato linha a linha (data, tipo, quantidade, cuidador, motivo)
+      e ações de compra/ajuste/perda
+- [x] Dose avulsa SOS (DEC-014): fluxo na tela da ronda (residente →
+      medicamento SOS → quantidade → confirmar), `horario_id` nulo,
+      baixa pelo trigger existente
+- [x] 2 migrations novas (20260717000100 ledger, 20260717000200 view)
+      aplicadas e espelhadas; smoke test com rollback + 16 blocos de
+      teste SQL; ciclo completo verificado no navegador (viewport 375px);
+      `npm run build` OK; banco resetado limpo ao final
 
 **Sessão #3 (2026-07-16) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_03.md`. Entregas:
 - [x] Acesso à gestão (DEC-024, substitui parcialmente DEC-011): flag
@@ -67,14 +91,13 @@ PWA + 7 tabelas + trigger de baixa (DEC-008) + views de estoque + RLS + seed.
 - Fase 2 — Documentação de projeto (concluída em 2026-07-15): BRIEFING.md v1.2,
   DECISIONS.md, modelo de 7 tabelas, regras de negócio 100% definidas
 
-**Próxima sessão:** **Sessão Claude Code #4** — estoque e SOS (a dor nº 1):
-entradas no ledger (compra, ajuste por contagem, perda manuais), visão de
-saldo/cobertura com alerta de reposição (< 5 dias) e fluxo de dose avulsa
-SOS/PRN.
+**Próxima sessão:** **Sessão Claude Code #5** — deploy no Railway, PWA no
+celular da casa, cadastro dos dados reais (incl. bootstrap da admin real,
+Thais) e acompanhamento do início do piloto.
 
 ## Pendências operacionais
 
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_03.md, salvar no Drive, commit + push
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_04.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** habilitar "Leaked Password Protection" no dashboard
       (Auth) — aviso dos security advisors (pendente desde a Sessão #2)
 - [ ] **Guilherme:** testar o fluxo no celular da casa (login
@@ -90,11 +113,12 @@ SOS/PRN.
 
 ## Próximos passos (ordem sugerida)
 
-1. **Sessão Claude Code #4:** estoque (entradas, ajuste, perda, saldo,
-   alerta de cobertura) + dose avulsa SOS
-2. **Sessão Claude Code #5:** deploy no Railway, PWA no celular da casa,
-   cadastro dos dados reais
-3. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
+1. **Sessão Claude Code #5:** deploy no Railway, PWA no celular da casa,
+   cadastro dos dados reais (bootstrap da Thais como admin), última
+   contagem manual como estoque inicial
+2. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
+3. Avaliar relatório de adesão por residente (BRIEFING §MVP item 10) —
+   entra na 5 ou vira sessão própria
 
 ## Convenções deste projeto
 

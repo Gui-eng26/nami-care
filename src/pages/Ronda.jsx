@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import DoseSos from './DoseSos.jsx'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -34,6 +35,8 @@ export default function Ronda({ turno, onTurnoFechado }) {
   const [doses, setDoses] = useState(null)
   const [proximaRonda, setProximaRonda] = useState(null)
   const [doseAberta, setDoseAberta] = useState(null)
+  const [sosAberto, setSosAberto] = useState(false)
+  const [avisoSos, setAvisoSos] = useState(null)
   const [avisoFechamento, setAvisoFechamento] = useState(null)
   const [fechando, setFechando] = useState(false)
 
@@ -172,9 +175,20 @@ export default function Ronda({ turno, onTurnoFechado }) {
       <section className="secao">
         <div className="card card-sos">
           <p>
-            <strong>Dose avulsa (SOS)</strong> — registro de medicamento sem horário fixo
-            chega na Sessão #4 (fora da ronda).
+            <strong>Dose avulsa (SOS)</strong> — medicamento sem horário fixo, dado
+            conforme a necessidade (dor, febre, desconforto).
           </p>
+          {avisoSos && <p className="aviso aviso-ok">{avisoSos}</p>}
+          <button
+            type="button"
+            className="botao-secundario botao-sos"
+            onClick={() => {
+              setAvisoSos(null)
+              setSosAberto(true)
+            }}
+          >
+            Registrar dose SOS
+          </button>
         </div>
       </section>
 
@@ -195,6 +209,17 @@ export default function Ronda({ turno, onTurnoFechado }) {
           </p>
         )}
       </section>
+
+      {sosAberto && (
+        <DoseSos
+          turno={turno}
+          onFechar={() => setSosAberto(false)}
+          onRegistrada={(mensagem) => {
+            setSosAberto(false)
+            setAvisoSos(mensagem)
+          }}
+        />
+      )}
 
       {doseAberta && (
         <RegistrarDose

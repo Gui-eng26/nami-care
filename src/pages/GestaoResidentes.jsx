@@ -158,7 +158,7 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
   const carregarMedicamentos = useCallback(async () => {
     const { data, error } = await supabase
       .from('medicamentos')
-      .select('id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo')
+      .select('id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo')
       .eq('idoso_id', residente.id)
       .order('ativo', { ascending: false })
       .order('nome')
@@ -203,7 +203,7 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
           await carregarMedicamentos()
           const { data } = await supabase
             .from('medicamentos')
-            .select('id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo')
+            .select('id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo')
             .eq('id', medicamento.id)
             .single()
           if (data) setMedicamento(data)
@@ -335,7 +335,8 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
               p_dosagem: valores.dosagem || null,
               p_forma_farmaceutica: valores.forma || null,
               p_posologia: valores.posologia || null,
-              p_tipo: valores.tipo
+              p_tipo: valores.tipo,
+              p_estoque_minimo: valores.estoqueMinimo
             })
             if (r) {
               setForm(null)
@@ -496,8 +497,11 @@ function FichaMedicamento({ credencial, residente, medicamento, onVoltar, onAtua
       )}
       {medicamento.tipo === 'sos' && (
         <p className="card-sos">
-          Medicamento SOS: sem horários fixos — é registrado como dose avulsa
-          (fluxo da Sessão #4).
+          Medicamento SOS: sem horários fixos — registrado como dose avulsa na
+          tela da ronda.{' '}
+          {medicamento.estoque_minimo !== null
+            ? `Estoque mínimo de segurança: ${Number(medicamento.estoque_minimo)} (alerta de recompra abaixo disso).`
+            : 'Sem estoque mínimo definido — o alerta de recompra fica desligado.'}
         </p>
       )}
 
@@ -530,7 +534,8 @@ function FichaMedicamento({ credencial, residente, medicamento, onVoltar, onAtua
               p_dosagem: valores.dosagem || null,
               p_forma_farmaceutica: valores.forma || null,
               p_posologia: valores.posologia || null,
-              p_tipo: valores.tipo
+              p_tipo: valores.tipo,
+              p_estoque_minimo: valores.estoqueMinimo
             })
             if (r) {
               setForm(null)
@@ -626,6 +631,9 @@ function FormMedicamento({ medicamento, ocupado, onFechar, onSalvar }) {
   const [forma, setForma] = useState(medicamento?.forma_farmaceutica ?? '')
   const [posologia, setPosologia] = useState(medicamento?.posologia ?? '')
   const [tipo, setTipo] = useState(medicamento?.tipo ?? 'continuo')
+  const [estoqueMinimo, setEstoqueMinimo] = useState(
+    medicamento?.estoque_minimo != null ? String(Number(medicamento.estoque_minimo)) : ''
+  )
 
   return (
     <div className="modal-fundo" onClick={onFechar}>
@@ -640,7 +648,10 @@ function FormMedicamento({ medicamento, ocupado, onFechar, onSalvar }) {
               dosagem: dosagem.trim(),
               forma: forma.trim(),
               posologia: posologia.trim(),
-              tipo
+              tipo,
+              // Estoque mínimo só faz sentido para SOS (DEC-027).
+              estoqueMinimo:
+                tipo === 'sos' && estoqueMinimo !== '' ? Number(estoqueMinimo) : null
             })
           }}
         >
@@ -677,6 +688,20 @@ function FormMedicamento({ medicamento, ocupado, onFechar, onSalvar }) {
               <option value="sos">SOS (dose avulsa, sem horários)</option>
             </select>
           </label>
+          {tipo === 'sos' && (
+            <label>
+              Estoque mínimo de segurança (opcional)
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                inputMode="decimal"
+                placeholder="alerta de recompra abaixo desta quantidade"
+                value={estoqueMinimo}
+                onChange={(e) => setEstoqueMinimo(e.target.value)}
+              />
+            </label>
+          )}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar

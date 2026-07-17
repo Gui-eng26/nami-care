@@ -566,6 +566,104 @@ body {
   flex: 1;
 }
 
+/* ---- estoque (Sessão #4) ---- */
+
+.secao-repor h2 {
+  color: var(--cor-alerta);
+}
+
+.card-alerta {
+  border-color: #f3d9a4;
+  background: var(--cor-alerta-fundo);
+}
+
+.estoque-residente {
+  font-size: 0.9375rem;
+  margin-bottom: 0.5rem;
+}
+
+.estoque-saldo {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--cor-texto);
+  margin-top: 0.5rem;
+}
+
+.estoque-saldo-unidade {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cor-texto-suave);
+}
+
+.estoque-rotulo {
+  font-size: 0.875rem;
+  color: var(--cor-texto-suave);
+}
+
+.estoque-rotulo-alerta {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--cor-alerta);
+}
+
+.lista-extrato {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.extrato-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--cor-fundo-suave);
+}
+
+.extrato-linha:last-child {
+  border-bottom: none;
+}
+
+.extrato-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.extrato-tipo {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.extrato-detalhe {
+  font-size: 0.75rem;
+  color: var(--cor-texto-suave);
+}
+
+.extrato-qtd {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.extrato-qtd-positiva {
+  color: var(--cor-ok);
+}
+
+.extrato-qtd-negativa {
+  color: var(--cor-erro);
+}
+
+.botao-sos {
+  width: 100%;
+  margin-top: 0.625rem;
+}
+
+.card-sos .aviso {
+  margin-top: 0.5rem;
+}
+
 /* ---- gestão ---- */
 
 .abas {

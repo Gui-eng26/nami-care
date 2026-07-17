@@ -101,7 +101,8 @@ async function main() {
         dosagem: med.dosagem,
         forma_farmaceutica: med.forma,
         posologia: med.posologia,
-        tipo: med.tipo
+        tipo: med.tipo,
+        estoque_minimo: med.estoqueMinimo ?? null
       })
       .select('id')
       .single()

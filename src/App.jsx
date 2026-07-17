@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase.js'
 import LoginCasa from './pages/LoginCasa.jsx'
 import AssumirTurno from './pages/AssumirTurno.jsx'
 import Ronda from './pages/Ronda.jsx'
+import Estoque from './pages/Estoque.jsx'
 import Gestao from './pages/Gestao.jsx'
 
 // Estados: sessão do usuário Supabase da casa (DEC-019) e turno aberto (PIN).
@@ -13,6 +14,8 @@ export default function App() {
   const [sessao, setSessao] = useState(undefined)
   const [turno, setTurno] = useState(undefined)
   const [gestao, setGestao] = useState(false)
+  // Com turno aberto, a operação tem duas telas: a ronda e o estoque (Sessão #4).
+  const [telaTurno, setTelaTurno] = useState('ronda')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessao(data.session))
@@ -64,7 +67,37 @@ export default function App() {
   } else if (!turno) {
     conteudo = <AssumirTurno onTurnoAberto={setTurno} />
   } else {
-    conteudo = <Ronda turno={turno} onTurnoFechado={() => setTurno(null)} />
+    conteudo = (
+      <>
+        <div className="abas">
+          <button
+            type="button"
+            className={`aba ${telaTurno === 'ronda' ? 'aba-ativa' : ''}`}
+            onClick={() => setTelaTurno('ronda')}
+          >
+            Ronda
+          </button>
+          <button
+            type="button"
+            className={`aba ${telaTurno === 'estoque' ? 'aba-ativa' : ''}`}
+            onClick={() => setTelaTurno('estoque')}
+          >
+            Estoque
+          </button>
+        </div>
+        {telaTurno === 'ronda' ? (
+          <Ronda
+            turno={turno}
+            onTurnoFechado={() => {
+              setTurno(null)
+              setTelaTurno('ronda')
+            }}
+          />
+        ) : (
+          <Estoque />
+        )}
+      </>
+    )
   }
 
   return (

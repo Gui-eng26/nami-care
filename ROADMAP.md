@@ -61,22 +61,32 @@ tocar no banco na mão — verificado no ciclo completo + testes SQL.
 fica para o cadastro de dados reais (Sessão 5) · MH-001 (unificar a
 verificação de PIN duplicada em `abrir_turno`).
 
-## Sessão 4 — Estoque e SOS (a dor nº 1) 🔜
+## Sessão 4 — Estoque e SOS (a dor nº 1) ✅ (2026-07-17)
 
-Fecha o ciclo do estoque e substitui a contagem manual semanal.
+Fechou o ciclo do estoque e substitui a contagem manual semanal.
 
-- **Entradas no ledger:** fluxo de reposição — medicamento, quantidade,
-  data → linha positiva em `movimentacoes_estoque`. Hoje só existem
-  saídas (trigger da Sessão 1); sem entradas, o saldo só desce.
-- **Visão de estoque:** saldo atual por medicamento (soma do ledger),
-  histórico de movimentações (auditoria linha a linha).
-- **Alerta de cobertura:** recomendação de reposição quando a cobertura
-  projetada cair abaixo de 5 dias (limiar já decidido).
-- **Fluxo SOS/PRN:** registro de dose avulsa fora da ronda (decisão já
-  tomada: fluxo separado), com baixa de estoque pelo mesmo trigger.
+- **Ledger completo por RPC:** `registrar_entrada_estoque` (compra, data
+  retroativa permitida), `registrar_ajuste_estoque` (a cuidadora informa a
+  contagem; o banco calcula e grava a diferença) e
+  `registrar_perda_estoque` (motivo obrigatório). Escrita direta em
+  `movimentacoes_estoque` revogada do cliente; o trigger de baixa virou
+  SECURITY DEFINER. Toda movimentação grava o cuidador do turno aberto.
+- **Visão de estoque (DEC-029):** tela nova com abas Ronda | Estoque;
+  lista por residente, seção "Repor" com os alertas no topo, extrato de
+  movimentações linha a linha por medicamento.
+- **Alerta de reposição (DEC-027):** contínuo = cobertura determinística
+  pela prescrição ativa (< 5 dias, DEC-012) com sugestão de compra para
+  30 dias (DEC-028); SOS = saldo abaixo do `estoque_minimo` do cadastro.
+- **Fluxo SOS/PRN (DEC-014):** dose avulsa na tela da ronda (residente →
+  medicamento SOS → quantidade), baixa pelo mesmo trigger da ronda.
 
-**Critério de pronto:** ciclo completo compra → entrada → baixa automática
-na dose → saldo e alerta visíveis, sem nenhuma contagem manual.
+**Critério de pronto atingido:** ciclo completo verificado no navegador —
+compra → saldo sobe → dose na ronda e dose SOS → saldo desce → alertas nos
+dois casos → ajuste por contagem corrige divergência sem apagar histórico.
+
+**Pendências pós-sessão:** commit + push · Leaked Password Protection no
+dashboard (desde a S2) · ajuste por contagem não é atômico com baixas
+concorrentes (aceito no piloto de dispositivo único).
 
 ## Sessão 5 — Deploy e piloto 🔜
 

@@ -446,3 +446,80 @@ da ronda dali em diante.
 (complexidade de schema sem ganho — a linha desativada JÁ é a versão);
 copiar nome/dosagem para dentro de `administracoes` (desnormalização que
 incharia a tabela de maior volume do sistema).
+---
+
+## DEC-027 — Alerta de reposição: dois métodos por natureza do medicamento
+**Data:** 2026-07-17 | **Status:** aprovada (implementada na Sessão #4)
+
+**Decisão:** O gatilho de reposição usa métodos distintos conforme o tipo:
+- **Contínuo/planejado:** cobertura determinística pela prescrição —
+  `cobertura_dias = saldo_atual ÷ doses_planejadas_por_dia`. Alerta quando a
+  cobertura projetada cai abaixo de 5 dias (DEC-012).
+- **SOS/PRN:** estoque mínimo de segurança por medicamento
+  (`medicamentos.estoque_minimo`, numeric com fração 0,5, definido pelo
+  cuidador no cadastro) — alerta quando `saldo_atual < estoque_minimo`.
+  Sem mínimo definido, o alerta fica desligado (a tela avisa).
+
+**Racional:** O consumo de um contínuo já está escrito na prescrição;
+derivá-lo de uma média móvel de histórico seria estimar o que já é conhecido,
+e introduz defasagem (a média demora a "perceber" uma troca de dose) e o
+risco de divisão por zero em itens sem consumo recente. A cobertura pela
+prescrição absorve mudanças de posologia na hora e não divide por zero,
+porque o denominador vem de um medicamento que tem horários cadastrados. Já o
+SOS não tem consumo planejável por natureza; projetar cobertura em dias
+inventaria previsibilidade inexistente. O mínimo de segurança é uma regra
+binária simples, e deixá-lo por medicamento (não global) respeita forma
+farmacêutica e frequência de uso — o cuidador, que opera, calibra melhor que
+um palpite de projeto.
+
+**Confirmado na implementação:** a modelagem da Sessão #3 só suporta
+posologia diária (`horarios.hora` é `time` — um disparo por dia por linha),
+então `doses_planejadas_por_dia = SUM(qtd_dose)` dos horários ativos, sem
+normalização semanal. Se um dia a posologia ganhar padrões não diários
+(dias alternados, X vezes por semana), o denominador precisará normalizar
+para base diária. Contínuo ativo sem horário ativo fica com cobertura NULL
+(fora das rondas) e sem alerta. O cálculo vive na view `cobertura_estoque`
+(redefinida; a versão de média móvel de 14 dias da Sessão #1 foi descartada).
+
+**Alternativa descartada:** média móvel única (ex.: 14 dias) para todos os
+medicamentos. Rejeitada por fragilidade (escolha arbitrária de janela,
+tratamento de divisão por zero, defasagem frente a mudanças de prescrição) e
+por baixa legibilidade para a cuidadora.
+
+---
+
+## DEC-028 — Sugestão de compra: repor para 30 dias de cobertura
+**Data:** 2026-07-17 | **Status:** aprovada (tomada na Sessão #4)
+
+**Decisão:** para contínuos em alerta, a visão de estoque sugere a quantidade
+que devolve ~30 dias de cobertura: `sugestao_compra =
+ceil(doses_por_dia × 30 − saldo)`. Sem sugestão para SOS (sem consumo
+planejável, a quantidade é decisão de quem opera).
+
+**Racional:** 30 dias casa com a caixa típica de 30 unidades da farmácia
+brasileira e com ciclo mensal de compra — um patamar que evita tanto compra
+semanal (fricção) quanto estoque parado. O rótulo na tela é operacional
+("comprar 26"), não estatístico.
+
+---
+
+## DEC-029 — Tela de estoque: organizada por residente, alertas no topo
+**Data:** 2026-07-17 | **Status:** aprovada (tomada na Sessão #4)
+
+**Decisão:** a lista de estoque agrupa por residente (não consolida por
+medicamento), com uma seção "Repor" fixa no topo reunindo todos os itens em
+alerta (contínuos abaixo de 5 dias e SOS abaixo do mínimo). Estoque de
+medicamento ou residente desativado permanece visível com selo "Inativo",
+mas **não** dispara alerta de reposição.
+
+**Racional:** o agrupamento espelha a realidade física — cada residente tem
+a própria caixa de medicamentos, e o mesmo remédio de dois residentes são
+dois estoques separados no armário (consolidar esconderia qual caixa está
+acabando). A seção "Repor" é a lista de compras em uma olhada — o destino
+da contagem semanal que o sistema substitui. Item desativado não pede compra,
+mas o físico continua existindo e auditável (resolve a pendência #6 do
+relatório da Sessão #3).
+
+**Alternativa descartada:** visão consolidada por nome de medicamento —
+útil para negociar compra em volume, mas ilegível para a operação diária;
+pode virar relatório em versão futura.
