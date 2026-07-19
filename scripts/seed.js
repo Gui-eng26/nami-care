@@ -1,8 +1,11 @@
 // Seed de dados de teste do Nami Care.
 //
 // Uso:
-//   npm run seed             — popula um banco vazio (aborta se já houver dados)
-//   npm run seed -- --reset  — apaga TODOS os dados e repopula
+//   npm run seed                     — popula um banco vazio (aborta se já houver dados)
+//   npm run seed -- --reset          — apaga TODOS os dados e repopula (banco limpo)
+//   npm run seed -- --com-historico  — reset + ~7 dias de histórico de administrações
+//                                      para testar o relatório de adesão (Sessão #5);
+//                                      deixa um turno ABERTO com doses pendentes
 //
 // Requer em .env.local (carregado via --env-file no script npm):
 //   VITE_SUPABASE_URL            — URL do projeto
@@ -10,6 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { cuidadores, idosos, medicamentos } from './seed-data.js'
+import { gerarHistorico } from './seed-historico.js'
 
 const url = process.env.VITE_SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -57,7 +61,10 @@ async function bancoTemDados() {
 }
 
 async function main() {
-  if (process.argv.includes('--reset')) {
+  // --com-historico sempre parte do zero: o histórico referencia horários e
+  // turnos específicos e não pode ser sobreposto a dados existentes.
+  const comHistorico = process.argv.includes('--com-historico')
+  if (process.argv.includes('--reset') || comHistorico) {
     await resetar()
   } else if (await bancoTemDados()) {
     console.error('O banco já tem dados. Use `npm run seed -- --reset` para repopular.')
@@ -135,6 +142,10 @@ async function main() {
   console.log(`  ${idososInseridos.length} idosos`)
   console.log(`  ${medicamentos.length} medicamentos (${medicamentos.filter((m) => m.tipo === 'sos').length} SOS)`)
   console.log(`  ${totalHorarios} horários, ${medicamentos.length} entradas de estoque`)
+
+  if (comHistorico) {
+    await gerarHistorico(supabase, falhar)
+  }
 }
 
 main()

@@ -783,3 +783,83 @@ body {
   color: var(--cor-texto-suave);
   margin-bottom: 0.75rem;
 }
+
+/* ---- adesão ---- */
+
+.atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.atalho {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 999px;
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.atalho-ativo {
+  background: var(--cor-primaria-escura);
+  border-color: var(--cor-primaria-escura);
+  color: #fff;
+}
+
+.aviso-alerta {
+  color: var(--cor-alerta);
+  background: var(--cor-alerta-fundo);
+}
+
+.adesao-contexto {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+  margin-bottom: 0.75rem;
+}
+
+.adesao-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.adesao-qtd {
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+.adesao-pct {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.adesao-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cor-fundo-suave);
+  overflow: hidden;
+  margin: 0.25rem 0 0.875rem;
+}
+
+.adesao-barra-preenchida {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.adesao-sos {
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+}
+
+.adesao-sos-nota {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}

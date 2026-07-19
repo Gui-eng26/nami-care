@@ -1,11 +1,34 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-17 (fim da Sessão #4)
+> Última atualização: 2026-07-18 (fim da Sessão #5)
 
 ## Onde estamos
 
-**Fase atual:** Fase 3 — Implementação via Claude Code (em andamento)
+**Fase atual:** Fase 3 — Implementação via Claude Code (MVP de produto
+COMPLETO; falta deploy/go-live)
+
+**Sessão #5 (2026-07-18) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_05.md`. Entregas:
+- [x] Relatório de adesão (BRIEFING §6 item 10 — último item de produto do
+      MVP): RPC `relatorio_adesao` (DEC-030 — denominador = doses
+      materializadas, classificação pelo status gravado, pendentes à parte
+      via `doses_do_turno`, SOS como contagem absoluta, percentuais no
+      banco, fuso da casa)
+- [x] Aba "Adesão" junto de Ronda | Estoque, sem PIN de gestão (DEC-031);
+      visão macro (casa) = micro (residente) sem filtro — mesma RPC;
+      atalhos Hoje/Ontem/7 dias/Este mês + calendário livre; residente
+      desativado com histórico contando e selo na lista (DEC-032)
+- [x] `npm run seed -- --com-historico`: ~7 dias de histórico reprodutível
+      pelas RPCs (turnos reais, 4 status, SOS, mudança de posologia
+      versionada no meio do período, hoje parcial com turno aberto) — para
+      o teste funcional do Guilherme antes do go-live
+- [x] 1 migration nova (20260718000100) aplicada e espelhada; smoke test
+      com rollback + bateria SQL de 7 blocos; conferência tela × SQL;
+      `npm run build` OK; advisors sem aviso novo; banco resetado limpo
+- [x] Pendência da Sessão #2 encerrada: Leaked Password Protection é
+      indisponível no plano Free; mitigado com senha aleatória forte da
+      casa + Minimum password length = 12 (documentado no relatório)
+- [x] Deploy movido para a Sessão #6 (reordenação deliberada do ROADMAP)
 
 **Sessão #4 (2026-07-17) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_04.md`. Entregas:
 - [x] Ledger completo (DEC-004 fechada de ponta a ponta): RPCs
@@ -91,34 +114,39 @@ PWA + 7 tabelas + trigger de baixa (DEC-008) + views de estoque + RLS + seed.
 - Fase 2 — Documentação de projeto (concluída em 2026-07-15): BRIEFING.md v1.2,
   DECISIONS.md, modelo de 7 tabelas, regras de negócio 100% definidas
 
-**Próxima sessão:** **Sessão Claude Code #5** — deploy no Railway, PWA no
+**Próxima sessão:** **Sessão Claude Code #6** — deploy no Railway, PWA no
 celular da casa, cadastro dos dados reais (incl. bootstrap da admin real,
 Thais) e acompanhamento do início do piloto.
 
 ## Pendências operacionais
 
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_04.md, salvar no Drive, commit + push
-- [ ] **Guilherme:** habilitar "Leaked Password Protection" no dashboard
-      (Auth) — aviso dos security advisors (pendente desde a Sessão #2)
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_05.md, salvar no Drive, commit + push
+- [ ] **Guilherme:** teste funcional com `npm run seed -- --com-historico`
+      antes do go-live (aba Adesão com 7 dias de dados; `--reset` para limpar)
 - [ ] **Guilherme:** testar o fluxo no celular da casa (login
       `casa@namicare.app` — senha em `.env.local` — e turno com PIN de teste;
       gestão: Ana Souza, PIN 1111)
 - [ ] Ícones do PWA estão em SVG; gerar PNG 192/512 antes do teste de instalação
-      no celular da casa (o logo real entra na Sessão #5)
+      no celular da casa (o logo real entra na Sessão #6)
 - [ ] Termo LGPD com a casa de repouso ANTES de inserir dados reais
 - [ ] Bloqueio por inatividade (repedir PIN — implicação da DEC-002) ficou
       fora do MVP; reavaliar após o piloto começar
 - [ ] Bootstrap da administradora real (Thais) por seed/script no cadastro
-      dos dados reais — a gestão exige uma admin já existente (Sessão #5)
+      dos dados reais — a gestão exige uma admin já existente (Sessão #6)
+- [x] ~~Leaked Password Protection~~ — ENCERRADA na Sessão #5: indisponível
+      no plano Free; mitigada com senha aleatória forte + comprimento
+      mínimo 12 (ver RELATORIO_SESSAO_05.md §5)
 
 ## Próximos passos (ordem sugerida)
 
-1. **Sessão Claude Code #5:** deploy no Railway, PWA no celular da casa,
-   cadastro dos dados reais (bootstrap da Thais como admin), última
-   contagem manual como estoque inicial
+1. **Sessão Claude Code #6:** deploy no Railway, URLs no Supabase Auth,
+   PWA no celular da casa, cadastro dos dados reais (bootstrap da Thais
+   como admin), última contagem manual como estoque inicial
 2. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
-3. Avaliar relatório de adesão por residente (BRIEFING §MVP item 10) —
-   entra na 5 ou vira sessão própria
+   (observar cobertura de turnos — limite documentado na DEC-030)
+3. Backlog registrado: acuracidade de estoque (extrato de movimentações por
+   período — candidata a sessão própria); motivo de recusa agregado por
+   medicamento (ideia futura)
 
 ## Convenções deste projeto
 

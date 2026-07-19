@@ -88,16 +88,47 @@ dois casos → ajuste por contagem corrige divergência sem apagar histórico.
 dashboard (desde a S2) · ajuste por contagem não é atômico com baixas
 concorrentes (aceito no piloto de dispositivo único).
 
-## Sessão 5 — Deploy e piloto 🔜
+## Sessão 5 — Relatório de adesão ✅ (2026-07-18)
+
+Reordenação deliberada: o deploy (planejado originalmente aqui) foi para a
+Sessão 6; a 5 fechou o último item de produto do MVP (BRIEFING §6 item 10).
+
+- **Modelo de cálculo (DEC-030):** denominador = doses já materializadas em
+  `administracoes` (nunca reconstrução da grade histórica — o fechamento
+  obrigatório de turno garante a completude e o versionamento de prescrição
+  é absorvido naturalmente); classificação pelo status gravado, nunca por
+  timestamps; 4 categorias + pendentes à parte (via `doses_do_turno`, sem
+  duplicar a lógica de slots) + SOS como contagem absoluta; percentuais no
+  banco, fuso da casa.
+- **Aba "Adesão" (DEC-031):** operação junto de Ronda | Estoque, sem PIN de
+  gestão — indicadores visíveis a toda a equipe (escolha registrada). Macro
+  (casa) = micro (residente) sem filtro, mesma RPC; atalhos + calendário
+  livre; residente desativado conta no histórico com selo na lista
+  (DEC-032).
+- **Seed com histórico:** `npm run seed -- --com-historico` — ~7 dias pelas
+  RPCs reais (turnos, 4 status, SOS, mudança de posologia versionada, hoje
+  parcial com turno aberto), reprodutível para o teste funcional pré-go-live.
+
+**Critério de pronto atingido:** números da tela conferidos contra contagem
+manual por SQL em todas as visões (hoje, multi-dia com mudança de posologia,
+por residente, fronteira de fuso), bateria de 7 blocos + smoke com rollback.
+
+**Pendências pós-sessão:** commit + push · teste funcional do Guilherme com
+`--com-historico` · Leaked Password Protection ENCERRADA (indisponível no
+Free; mitigada — ver RELATORIO_SESSAO_05.md §5).
+
+## Sessão 6 — Deploy e go-live 🔜
 
 - Deploy do frontend no Railway (consolidando com a infra existente).
 - Configurar URLs permitidas no Supabase Auth para o domínio de produção.
-- Instalação como PWA no celular compartilhado da casa.
-- Cadastro dos dados reais (cuidadoras, residentes, prescrições, estoque
-  inicial contado uma última vez à mão — a última contagem manual).
-- Ajustes de usabilidade a partir do teste no dispositivo real (alvos de
-  toque no teclado PIN, comportamento do modal de tratativa etc.).
-- Acompanhamento da primeira semana de uso com a Thais.
+- Ícones PNG 192/512 do PWA e instalação no celular compartilhado da casa.
+- Termo LGPD com a casa ANTES dos dados reais.
+- Cadastro dos dados reais (bootstrap da Thais como admin, cuidadoras,
+  residentes, prescrições, estoque inicial contado uma última vez à mão —
+  a última contagem manual).
+- Ajustes de usabilidade a partir do teste no dispositivo real.
+- Acompanhamento da primeira semana de uso com a Thais (observar cobertura
+  de turnos — limite documentado na DEC-030).
 
 **Critério de pronto:** casa operando no app, sem planilha e sem contagem
 manual.
@@ -106,11 +137,16 @@ manual.
 
 ## Fora de escopo do MVP (backlog pós-piloto)
 
+- **Acuracidade de estoque** — extrato/relatório de movimentações por
+  período (ideia do Guilherme, Sessão #5): candidata a sessão própria.
+- Motivo de recusa agregado por medicamento (registrada na Sessão #5).
 - Relatórios/exportação para família ou vigilância sanitária.
 - Multi-casa (hoje: 1 casa, 1 usuário Supabase, PIN por cuidadora —
   DEC-019).
 - Notificações push de dose atrasada.
 - Painel remoto para a Thais acompanhar de fora da casa.
+- Desempenho por cuidador: decidido NÃO construir (Sessão #5) — mudaria a
+  natureza da ferramenta, de cuidado para vigilância.
 
 ## Princípios permanentes (valem em toda sessão)
 

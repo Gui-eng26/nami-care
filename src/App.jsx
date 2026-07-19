@@ -4,6 +4,7 @@ import LoginCasa from './pages/LoginCasa.jsx'
 import AssumirTurno from './pages/AssumirTurno.jsx'
 import Ronda from './pages/Ronda.jsx'
 import Estoque from './pages/Estoque.jsx'
+import Adesao from './pages/Adesao.jsx'
 import Gestao from './pages/Gestao.jsx'
 
 // Estados: sessão do usuário Supabase da casa (DEC-019) e turno aberto (PIN).
@@ -84,8 +85,16 @@ export default function App() {
           >
             Estoque
           </button>
+          {/* Adesão é aba de operação, sem PIN de gestão (DEC-031). */}
+          <button
+            type="button"
+            className={`aba ${telaTurno === 'adesao' ? 'aba-ativa' : ''}`}
+            onClick={() => setTelaTurno('adesao')}
+          >
+            Adesão
+          </button>
         </div>
-        {telaTurno === 'ronda' ? (
+        {telaTurno === 'ronda' && (
           <Ronda
             turno={turno}
             onTurnoFechado={() => {
@@ -93,9 +102,9 @@ export default function App() {
               setTelaTurno('ronda')
             }}
           />
-        ) : (
-          <Estoque />
         )}
+        {telaTurno === 'estoque' && <Estoque />}
+        {telaTurno === 'adesao' && <Adesao />}
       </>
     )
   }

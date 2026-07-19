@@ -523,3 +523,85 @@ relatório da Sessão #3).
 **Alternativa descartada:** visão consolidada por nome de medicamento —
 útil para negociar compra em volume, mas ilegível para a operação diária;
 pode virar relatório em versão futura.
+
+---
+
+## DEC-030 — Relatório de adesão: denominador = doses materializadas; classificação pelo status
+**Data:** 2026-07-18 | **Status:** aprovada (decidida com o Guilherme antes da
+sessão; implementada na Sessão #5)
+
+**Decisão:** o relatório de adesão (RPC `relatorio_adesao`) NÃO reconstrói a
+grade histórica de horários. O denominador são as doses já **materializadas**:
+linhas de `administracoes` de ronda (`horario_id` não nulo) com `prevista_em`
+dentro do período, no fuso da casa (`fn_fuso_casa`, DEC-023). Quatro categorias
+mutuamente exclusivas, classificadas exclusivamente pelo **status gravado** —
+`tomado_no_horario` (no horário), `tomado_atrasado` (atrasada), `recusado`
+(recusada — decisão do residente) e `nao_tomado` (não tomada — falha
+operacional). "Recusada" e "não tomada" nunca se somam: juntá-las esconderia o
+sinal mais grave dos dois. Percentuais calculados na RPC, nunca no cliente.
+SOS (`horario_id IS NULL`, instante em `registrado_em`) fica **fora** dos
+percentuais: contagem absoluta, sem denominador natural — não se inventa taxa.
+No dia corrente, dose futura fica fora do denominador; dose vencida sem
+tratativa entra como **pendente**, categoria à parte, obtida de
+`doses_do_turno` do turno aberto (fonte única da lógica de slots — nenhuma
+segunda implementação); só vira "não tomada" quando registrada como tal.
+
+**Racional:** (1) comparar `registrado_em` com `prevista_em` NÃO classifica:
+o registro tardio de dose tomada no horário grava `registrado_em =
+prevista_em` (DEC-023) — a classificação tem que sair do status. (2) O
+fechamento obrigatório de turno (DEC-010/022) garante que cada dia já fechado
+carrega, em linhas próprias, exatamente as doses devidas daquele dia — o
+denominador materializado é completo por construção, e a prescrição
+versionada (DEC-026) é absorvida naturalmente (a mudança de posologia no meio
+do período soma certo sem lógica extra).
+
+**Dependência explícita:** a completude do denominador se apoia no fechamento
+obrigatório de turno. Se essa garantia mudar (turno puder fechar com dose sem
+tratativa, ou operação com lacunas de cobertura entre turnos), doses nunca
+materializadas sumiriam do denominador silenciosamente e o relatório
+superestimaria a adesão. **Limite conhecido hoje:** um slot que vence num
+intervalo em que nenhum turno está aberto não entra em turno nenhum — não é
+materializado, não aparece como pendente (nem na ronda, comportamento herdado
+da Sessão #2). No piloto a cobertura de turnos é contínua; risco registrado
+para o go-live.
+
+**Alternativas descartadas:** reconstruir a grade histórica a partir de
+`horarios` (quebraria com o versionamento da DEC-026, exigiria "grade vigente
+em cada dia passado" e duplicaria a lógica de slots — o custo da duplicação já
+está registrado na MH-001).
+
+---
+
+## DEC-031 — Relatório de adesão: aba de operação, sem PIN de gestão
+**Data:** 2026-07-18 | **Status:** aprovada (tomada na Sessão #5)
+
+**Decisão:** o relatório fica numa aba própria ("Adesão") ao lado de
+Ronda | Estoque, disponível a qualquer cuidadora com turno aberto, sem o PIN
+de administradora da DEC-024. A RPC é SECURITY INVOKER com EXECUTE para
+`authenticated` (anon negado) — mesma superfície de leitura que a cuidadora já
+tem sobre `administracoes`.
+
+**Consequência explícita (escolha, não detalhe):** os indicadores de adesão
+da casa ficam visíveis para toda a equipe, não só para a administração. Numa
+equipe de 4 pessoas isso é transparência operacional desejada — quem executa a
+ronda enxerga o resultado do próprio trabalho.
+
+**Alternativa descartada:** exigir autorização de gestão (DEC-024) — o
+relatório não altera nada e não é ato clínico-administrativo; o atrito do PIN
+só reduziria o uso.
+
+---
+
+## DEC-032 — Residente desativado no relatório de adesão
+**Data:** 2026-07-18 | **Status:** aprovada (tomada na Sessão #5)
+
+**Decisão:** o histórico do período em que o residente esteve ativo continua
+contando — o fato aconteceu — e ele segue incluído na visão macro do período.
+Na lista de seleção da visão micro, aparece com o selo "— inativo", e a micro
+dele funciona normalmente. Mesmo tratamento que a DEC-029 deu ao estoque de
+item desativado (visível, sem alerta).
+
+**Racional de consistência:** desativar um residente muda o futuro (sai da
+ronda e das agregações novas via `doses_do_turno`), nunca o passado — apagar
+o histórico da macro faria os totais de períodos fechados mudarem
+retroativamente, violando o princípio de auditoria (DEC-017).
