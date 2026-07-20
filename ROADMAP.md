@@ -142,15 +142,47 @@ verificado no navegador a 375px + bateria SQL sob rollback (20 blocos).
 de abrir o turno — foi confirmada e implementada na própria sessão: aviso
 com contagem na tela de assumir turno.)
 
-## Sessão 6 — Deploy e go-live 🔜
+## Sessão 6 — Catálogo de medicamentos e extrato de movimentação ✅ (2026-07-20)
+
+Reordenação deliberada: o deploy (planejado originalmente aqui) foi para a
+Sessão 7 — acompanhamento de movimentação de estoque é, junto do ciclo
+fechado na Sessão #4, o que mais valor entrega para a gestão da Thais, e
+entrou ainda no MVP.
+
+- **Catálogo de medicamentos (DEC-035):** nova entidade da casa
+  (`catalogo_medicamentos` + `medicamentos.catalogo_id` NOT NULL) que dá o
+  elo "mesmo remédio, N residentes" por seleção humana, nunca por texto —
+  construção orgânica, sem fonte externa. Cadastro busca/seleciona no
+  catálogo ou cria item novo junto (atômico); nome/dosagem/forma deixam de
+  ser texto livre na tela do residente; `catalogo_id` imutável após uso
+  (DEC-026 estendida). Backfill do seed: 23 itens (só Losartana 50 mg
+  compartilhada). Sem regressão no fluxo da Sessão #3.
+- **Extrato de movimentação (DEC-036):** tela somente leitura dentro da aba
+  Estoque, segmented control com "Estoque atual" (Sessão #4, inalterada,
+  padrão). Consolidado por catálogo (sub-abas contínuo/SOS, calendário da
+  Adesão), pior caso do grupo à frente, badge "N residentes" com
+  drill-down por residente; extrato do medicamento colorido por DIREÇÃO
+  (sinal da quantidade, não o tipo — o `ajuste_contagem` é bidirecional),
+  filtro por subtipo combinável com o período. Inativos com selo, sem
+  alerta. Duas RPCs SECURITY INVOKER reaproveitando `cobertura_estoque`;
+  RPCs/trigger da Sessão #4 intocados.
+
+**Critério de pronto atingido:** (1)–(9) do `SESSAO_06.md` conferidos no
+navegador a 375px + smoke com rollback de cada migration + bateria SQL
+(backfill, criação por item novo/existente, bloqueio de troca com histórico,
+ordenação pelo pior caso do grupo, sinal do ajuste, filtro de subtipo).
+
+**Pendências pós-sessão:** commit + push.
+
+## Sessão 7 — Deploy e go-live 🔜
 
 - Deploy do frontend no Railway (consolidando com a infra existente).
 - Configurar URLs permitidas no Supabase Auth para o domínio de produção.
 - Ícones PNG 192/512 do PWA e instalação no celular compartilhado da casa.
 - Termo LGPD com a casa ANTES dos dados reais.
 - Cadastro dos dados reais (bootstrap da Thais como admin, cuidadoras,
-  residentes, prescrições, estoque inicial contado uma última vez à mão —
-  a última contagem manual).
+  residentes, prescrições — via o catálogo novo da Sessão #6 —, estoque
+  inicial contado uma última vez à mão — a última contagem manual).
 - Ajustes de usabilidade a partir do teste no dispositivo real.
 - Acompanhamento da primeira semana de uso com a Thais (lacunas de turno
   agora visíveis na tela "Pendências entre turnos" — Sessão 5.5; treinar a
@@ -163,8 +195,6 @@ manual.
 
 ## Fora de escopo do MVP (backlog pós-piloto)
 
-- **Acuracidade de estoque** — extrato/relatório de movimentações por
-  período (ideia do Guilherme, Sessão #5): candidata a sessão própria.
 - Motivo de recusa agregado por medicamento (registrada na Sessão #5).
 - Relatórios/exportação para família ou vigilância sanitária.
 - Multi-casa (hoje: 1 casa, 1 usuário Supabase, PIN por cuidadora —

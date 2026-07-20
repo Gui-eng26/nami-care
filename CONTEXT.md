@@ -1,12 +1,32 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-20 (fim da Sessão #5.5)
+> Última atualização: 2026-07-20 (fim da Sessão #6)
 
 ## Onde estamos
 
 **Fase atual:** Fase 3 — Implementação via Claude Code (MVP de produto
 COMPLETO; falta deploy/go-live)
+
+**Sessão #6 (2026-07-20) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_06.md`. Duas
+entregas na ordem (a 2ª depende da 1ª):
+- [x] **Catálogo de medicamentos (DEC-035):** nova entidade da casa
+      `catalogo_medicamentos` + `medicamentos.catalogo_id` (FK NOT NULL);
+      elo "mesmo remédio, N residentes" por SELEÇÃO HUMANA, nunca por
+      texto. Cadastro busca/seleciona no catálogo ou cria item novo junto
+      (atômico); nome/dosagem/forma deixam de ser texto livre na tela do
+      residente; `catalogo_id` imutável após uso (DEC-026 estendida).
+      Backfill do seed: **23 itens** (só Losartana 50 mg compartilhada).
+- [x] **Extrato de movimentação (DEC-036):** tela SOMENTE LEITURA dentro
+      da aba Estoque, segmented control com "Estoque atual" (Sessão #4,
+      inalterada, padrão). Consolidado por catálogo (sub-abas Contínuo/SOS,
+      calendário da Adesão), pior caso do grupo à frente, badge "N
+      residentes" + detalhe por residente; drill-in colorido por DIREÇÃO
+      (sinal), filtro por subtipo. Inativos com selo, sem alerta.
+- [x] 2 migrations novas (000200 catálogo, 000300 extrato) com smoke/
+      rollback + bateria SQL; critério de pronto (1)–(9) no navegador
+      (375px); build OK; advisors sem novidade; seed atualizado (cria
+      catálogo) e resetado limpo (23 itens de catálogo)
 
 **Sessão #5.5 (2026-07-20) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_05_5.md`.
 Sessão curta dedicada ao **BUG-002** (dose vencida em período sem turno
@@ -137,12 +157,21 @@ PWA + 7 tabelas + trigger de baixa (DEC-008) + views de estoque + RLS + seed.
 - Fase 2 — Documentação de projeto (concluída em 2026-07-15): BRIEFING.md v1.2,
   DECISIONS.md, modelo de 7 tabelas, regras de negócio 100% definidas
 
-**Próxima sessão:** **Sessão Claude Code #6** — deploy no Railway, PWA no
-celular da casa, cadastro dos dados reais (incl. bootstrap da admin real,
-Thais) e acompanhamento do início do piloto.
+**Reordenação (2026-07-20):** antes do deploy, o Guilherme trouxe uma
+necessidade de negócio — acompanhamento de movimentação de estoque — que
+entra no MVP como **Sessão #6**. Ver `SESSAO_06.md`. O deploy/go-live
+(escopo que estava previsto aqui) vira **Sessão #7**.
+
+**Próxima sessão:** **Sessão Claude Code #7** — deploy no Railway, URLs no
+Supabase Auth, PWA no celular da casa, ícones PNG 192/512, termo LGPD, e
+cadastro dos dados reais **pelo catálogo novo da Sessão #6** (bootstrap da
+admin real, Thais): o 1º cadastro de cada remédio cria o item do catálogo,
+os demais residentes reaproveitam por busca. Acompanhamento do início do
+piloto. Ver `SESSAO_06.md` (fechada) e `RELATORIO_SESSAO_06.md`.
 
 ## Pendências operacionais
 
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_06.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** revisar RELATORIO_SESSAO_05_5.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** revisar RELATORIO_SESSAO_05.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** teste funcional com `npm run seed -- --com-historico`
@@ -151,21 +180,22 @@ Thais) e acompanhamento do início do piloto.
       `casa@namicare.app` — senha em `.env.local` — e turno com PIN de teste;
       gestão: Ana Souza, PIN 1111)
 - [ ] Ícones do PWA estão em SVG; gerar PNG 192/512 antes do teste de instalação
-      no celular da casa (o logo real entra na Sessão #6)
+      no celular da casa (o logo real entra na Sessão #7)
 - [ ] Termo LGPD com a casa de repouso ANTES de inserir dados reais
 - [ ] Bloqueio por inatividade (repedir PIN — implicação da DEC-002) ficou
       fora do MVP; reavaliar após o piloto começar
 - [ ] Bootstrap da administradora real (Thais) por seed/script no cadastro
-      dos dados reais — a gestão exige uma admin já existente (Sessão #6)
+      dos dados reais — a gestão exige uma admin já existente (Sessão #7)
 - [x] ~~Leaked Password Protection~~ — ENCERRADA na Sessão #5: indisponível
       no plano Free; mitigada com senha aleatória forte + comprimento
       mínimo 12 (ver RELATORIO_SESSAO_05.md §5)
 
 ## Próximos passos (ordem sugerida)
 
-1. **Sessão Claude Code #6:** deploy no Railway, URLs no Supabase Auth,
-   PWA no celular da casa, cadastro dos dados reais (bootstrap da Thais
-   como admin), última contagem manual como estoque inicial
+1. **Sessão Claude Code #7:** deploy no Railway, URLs no Supabase Auth,
+   PWA no celular da casa, cadastro dos dados reais pelo catálogo novo
+   (bootstrap da Thais como admin), última contagem manual como estoque
+   inicial
 2. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
    (lacunas de cobertura de turno agora são visíveis e tratáveis pela tela
    "Pendências entre turnos" — BUG-002 corrigido na Sessão #5.5; observar o

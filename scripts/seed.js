@@ -42,6 +42,7 @@ async function resetar() {
     'administracoes',
     'horarios',
     'medicamentos',
+    'catalogo_medicamentos',
     'idosos',
     'tentativas_pin',
     'turnos',
@@ -97,13 +98,32 @@ async function main() {
   if (erroIdosos) falhar('inserir idosos', erroIdosos)
   const idosoPorNome = Object.fromEntries(idososInseridos.map((i) => [i.nome, i.id]))
 
+  // Catálogo de medicamentos (DEC-035): um item por combinação exata de
+  // (nome, dosagem, forma) — o mesmo remédio de dois residentes aponta para o
+  // mesmo item. Construído a partir do seed, como faz o backfill da migration.
+  const catalogoPorChave = {}
+  async function catalogoId(nome, dosagem, forma) {
+    const chave = `${nome}|${dosagem ?? ''}|${forma ?? ''}`
+    if (catalogoPorChave[chave]) return catalogoPorChave[chave]
+    const { data, error } = await supabase
+      .from('catalogo_medicamentos')
+      .insert({ nome, dosagem: dosagem ?? null, forma_farmaceutica: forma ?? null })
+      .select('id')
+      .single()
+    if (error) falhar(`inserir item de catálogo ${nome}`, error)
+    catalogoPorChave[chave] = data.id
+    return data.id
+  }
+
   // Medicamentos + horários + estoque inicial
   let totalHorarios = 0
   for (const med of medicamentos) {
+    const catId = await catalogoId(med.nome, med.dosagem, med.forma)
     const { data: medInserido, error: erroMed } = await supabase
       .from('medicamentos')
       .insert({
         idoso_id: idosoPorNome[med.idoso],
+        catalogo_id: catId,
         nome: med.nome,
         dosagem: med.dosagem,
         forma_farmaceutica: med.forma,

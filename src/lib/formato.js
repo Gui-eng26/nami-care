@@ -12,6 +12,16 @@ export const ROTULO_MOVIMENTACAO = {
   perda: 'Perda'
 }
 
+// Rótulo por SUBTIPO do extrato (DEC-036): o ajuste de contagem é entrada ou
+// saída conforme o sinal da quantidade — a distinção mora aqui, não no tipo.
+export const ROTULO_SUBTIPO = {
+  compra: 'Compra',
+  dose: 'Dose administrada',
+  ajuste_mais: 'Ajuste de contagem (a mais)',
+  ajuste_menos: 'Ajuste de contagem (a menos)',
+  perda: 'Perda'
+}
+
 export function dataHoraLocal(iso) {
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit',

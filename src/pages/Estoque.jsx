@@ -2,6 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
 import { fmtQtd, ROTULO_MOVIMENTACAO, dataHoraLocal } from '../lib/formato.js'
+import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
+
+// Aba Estoque com duas visões (DEC-036). O seletor comunica diferença de
+// FUNÇÃO: "Estoque atual" tem as ações de compra/ajuste/perda (Sessão #4, sem
+// mudança); "Extrato de movimentações" é somente leitura. Abre sempre em
+// "Estoque atual" — idêntica à de antes.
+export default function Estoque() {
+  const [visao, setVisao] = useState('atual')
+  return (
+    <>
+      <div className="segmented">
+        <button
+          type="button"
+          className={`segmented-opcao ${visao === 'atual' ? 'segmented-ativa' : ''}`}
+          onClick={() => setVisao('atual')}
+        >
+          Estoque atual
+        </button>
+        <button
+          type="button"
+          className={`segmented-opcao ${visao === 'extrato' ? 'segmented-ativa' : ''}`}
+          onClick={() => setVisao('extrato')}
+        >
+          Extrato de movimentações
+        </button>
+      </div>
+      {visao === 'atual' ? <EstoqueAtual /> : <ExtratoMovimentacoes />}
+    </>
+  )
+}
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -38,7 +68,7 @@ function rotuloSituacao(item) {
 // cobertura_estoque (saldo = soma do ledger; cobertura e alerta calculados no
 // banco). Organização por residente (DEC-029): espelha as caixas físicas —
 // cada residente tem o próprio estoque; itens em alerta sobem para o topo.
-export default function Estoque() {
+function EstoqueAtual() {
   const [itens, setItens] = useState(null)
   const [abertoId, setAbertoId] = useState(null)
 

@@ -693,3 +693,103 @@ individualmente fica de fora (UNIQUE de slot + NOT EXISTS da fila).
 distinção falta confirmada × não apurado); quinta opção "pendente" no modal
 individual (a tratativa individual é justamente o caminho de apuração);
 lote sem PIN (ação de maior impacto agregado do sistema ficaria a um toque).
+
+---
+
+## DEC-035 — Catálogo de medicamentos da casa: elo por seleção humana, nunca por texto
+**Data:** 2026-07-20 | **Status:** aprovada (implementada na Sessão #6)
+
+**Contexto:** `medicamentos.idoso_id` é obrigatório — cada residente tem o
+próprio registro de medicamento, mesmo quando o remédio físico é o mesmo de
+outro residente (ex.: dois tomando Losartana 50 mg). Não existe elo entre os
+dois registros. Para a tela nova (DEC-036) agrupar "mesmo remédio, N
+residentes", comparar por texto (nome + dosagem + forma) foi descartado
+deliberadamente: divergência de digitação cria falso negativo, e qualquer
+normalização que tente compensar arrisca falso positivo (juntar remédios
+diferentes). O estoque em si (saldo, ledger) permanece SEMPRE separado por
+residente — custo e consumo são cobrados individualmente; isso não muda.
+
+**Decisão:** nova entidade `catalogo_medicamentos` (nome, dosagem,
+forma_farmaceutica, criado_em) — da CASA, sem `idoso_id`. `medicamentos.catalogo_id`
+(FK NOT NULL) dá o elo de identidade. O catálogo é construído ORGANICAMENTE, sem
+fonte externa (bulário/CMED): o primeiro cadastro de um remédio cria o item; os
+seguintes reaproveitam por SELEÇÃO HUMANA (busca por nome no cadastro), nunca por
+comparação de string. Sem restrição de unicidade no catálogo — travar por texto
+seria a própria normalização descartada, e uma quase-duplicata criada por engano
+é escolha humana, não erro de integridade (a busca torna isso raro).
+
+**medicamentos mantém a cópia de nome/dosagem/forma:** o histórico
+(`administracoes`) as lê por join, e a imutabilidade clínica (DEC-026) depende
+dessa cópia estável. Ao criar/vincular, a cópia vem do catálogo; a DEC-026 é
+estendida — `catalogo_id` também fica imutável após a primeira administração
+(trocar o item mudaria nome/dosagem/forma de quem tem histórico, reescrevendo a
+leitura do passado). Garantido por trigger, por qualquer caminho de escrita.
+
+**Cadastro (DEC-024 continua regendo a autorização):** `criar_medicamento` e
+`atualizar_medicamento` passam a operar pelo catálogo — ou selecionam um item
+existente (herança de nome/dosagem/forma, sem digitar de novo), ou criam um item
+novo do catálogo JUNTO com o medicamento (atômico, na mesma RPC). Na tela do
+residente, nome/dosagem/forma deixam de ser texto livre editável — trocar o
+remédio exige a mesma busca/seleção. posologia/tipo/estoque_minimo continuam por
+residente e sempre editáveis; a prescrição versionada (DEC-026) segue regendo
+mudança de posologia. Duplicata passa a ser por `catalogo_id` (mesmo remédio para
+o mesmo residente), não mais por texto.
+
+**Backfill:** um item de catálogo por combinação exata (nome, dosagem, forma)
+presente no seed — seguro porque só há dado de seed até aqui (dados reais entram
+na Sessão #7, já com o catálogo pronto). Gerou **23 itens** para 24 medicamentos
+(só Losartana 50 mg comprimido é compartilhada — Alzira e Lourdes).
+
+**Alternativas descartadas:** comparação/normalização de texto para agrupar
+(frágil nos dois sentidos — o motivo de existir do catálogo); importar bulário
+externo (peso sem valor para o piloto; o vocabulário real da casa é pequeno e
+emerge do uso); duas RPCs sequenciais para "criar item + medicamento" (não
+atômico, deixaria item de catálogo órfão se a segunda falhasse); unicidade de
+texto no catálogo (reintroduziria a comparação de string descartada).
+
+---
+
+## DEC-036 — Extrato de movimentação: leitura consolidada por catálogo, dentro da aba Estoque
+**Data:** 2026-07-20 | **Status:** aprovada (implementada na Sessão #6)
+
+**Decisão:** o acompanhamento de movimentação de estoque é uma tela SOMENTE
+LEITURA dentro da aba Estoque existente (não aba nova), alternada por um seletor
+no topo (segmented control) entre **"Estoque atual"** (a visão da Sessão #4, por
+residente, com as ações de compra/ajuste/perda — inalterada, e padrão ao abrir) e
+**"Extrato de movimentações"**. Os rótulos comunicam diferença de FUNÇÃO (não
+"por residente"/"por medicamento", que sugeriria a mesma ação agrupada diferente):
+nenhuma ação de estoque vive no extrato.
+
+**Visão consolidada (por catálogo, DEC-035):** duas sub-abas Contínuo | SOS;
+calendário de período no padrão da aba Adesão. Uma linha por item de catálogo,
+agregando os N residentes que o compartilham, ordenada do PIOR caso pro melhor —
+contínuo por `cobertura_dias` (view `cobertura_estoque`), SOS pela distância
+`saldo − estoque_minimo`. Com 2+ residentes, o PIOR valor do grupo decide a
+posição (badge "N residentes"; clicar expande o detalhe por residente com o valor
+individual). Item de residente/medicamento inativo aparece com selo, sem alerta e
+fora do cálculo de urgência (ordena por último — DEC-029/032). Clicar num item
+(ou num residente do detalhe) abre o extrato daquele `medicamento_id` no período.
+
+**Extrato por medicamento:** as `movimentacoes_estoque` do medicamento no período
+(fuso da casa), mais recente primeiro. **Cor por DIREÇÃO (sinal da quantidade),
+não por tipo:** verde para entrada (quantidade > 0), vermelho para saída (< 0).
+Crucial: `ajuste_contagem` é entrada OU saída conforme o sinal daquela linha — o
+subtipo (`ajuste_mais`/`ajuste_menos`) e a cor vêm do sinal, nunca só do campo
+tipo. Rótulos legíveis (Compra, Dose administrada, Ajuste de contagem a mais/a
+menos, Perda). Filtro por subtipo, combinável com o período. Sem PIN de gestão
+(aberta a toda cuidadora, como a Adesão — DEC-031).
+
+**Fonte de dados:** `cobertura_estoque`/`saldo_estoque` (Sessões #1/#4)
+reaproveitadas — saldo/cobertura nunca recalculados na tela. Duas RPCs novas,
+SECURITY INVOKER: `extrato_consolidado_estoque(p_tipo)` (agrega o pior caso do
+grupo no banco) e `extrato_medicamento(p_medicamento_id, p_inicio, p_fim,
+p_subtipos)` (extrato filtrado; deriva o subtipo pelo sinal no banco). As RPCs de
+compra/ajuste/perda, o trigger de baixa e `movimentacoes_estoque` ficam
+INTOCADOS — esta tela só lê e organiza.
+
+**Alternativas descartadas:** aba nova separada (esconderia que é a mesma aba
+Estoque, com outra função); consolidar por nome de medicamento via texto
+(descartado pela DEC-035 — o agrupamento é por `catalogo_id`); recalcular
+cobertura/saldo no cliente (duplicaria regra de negócio que já vive na view);
+cor por tipo em vez de sinal (classificaria errado o `ajuste_contagem`, que é
+bidirecional).

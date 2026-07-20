@@ -15,7 +15,8 @@ const MENSAGENS = {
   medicamento_nao_encontrado: 'Medicamento não encontrado.',
   medicamento_duplicado: 'Este residente já tem esse medicamento ativo.',
   medicamento_com_historico:
-    'Medicamento com administrações registradas: nome, dosagem e forma não mudam. Desative-o e cadastre a nova versão.',
+    'Medicamento com administrações registradas: não dá para trocar o remédio. Desative-o e cadastre a nova versão.',
+  catalogo_nao_encontrado: 'Item do catálogo não encontrado. Recarregue e tente de novo.',
   medicamento_sos: 'Medicamento SOS não tem horários fixos.',
   possui_horarios_ativos:
     'Desative os horários antes de tornar o medicamento SOS.',
