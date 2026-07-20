@@ -4,7 +4,7 @@ import DoseSos from './DoseSos.jsx'
 
 const FUSO = 'America/Sao_Paulo'
 
-function horaLocal(iso) {
+export function horaLocal(iso) {
   return new Date(iso).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -98,9 +98,18 @@ export default function Ronda({ turno, onTurnoFechado }) {
       return
     }
     if (data.erro === 'doses_pendentes') {
-      setAvisoFechamento(
-        `Ainda há ${data.total} dose(s) sem tratativa. Trate todas antes de encerrar o turno.`
-      )
+      // O bloqueio pode vir de duas filas (Sessão #5.5): doses deste turno
+      // (ronda) e pendências de períodos sem turno aberto (tela própria).
+      const partes = []
+      if (data.total_ronda > 0) {
+        partes.push(`${data.total_ronda} dose(s) deste turno sem tratativa (aqui na ronda)`)
+      }
+      if (data.total_entre_turnos > 0) {
+        partes.push(
+          `${data.total_entre_turnos} pendência(s) de períodos sem turno aberto (aba "Pendências entre turnos")`
+        )
+      }
+      setAvisoFechamento(`Ainda há ${partes.join(' e ')}. Resolva tudo antes de encerrar o turno.`)
       carregar()
     } else {
       setAvisoFechamento('Não foi possível encerrar o turno.')
@@ -259,7 +268,10 @@ function SlotDeDoses({ grupo, onTratar }) {
   )
 }
 
-function RegistrarDose({ dose, turno, onFechar, onRegistrada }) {
+// Também usado pela tela "Pendências entre turnos" (Sessão #5.5): a tratativa
+// individual de uma dose órfã é exatamente a mesma de uma dose atrasada da
+// ronda — mesmas quatro opções, mesmo insert (DEC-034 proíbe duplicar).
+export function RegistrarDose({ dose, turno, onFechar, onRegistrada }) {
   const atrasada = dose.situacao === 'atrasada'
   const [status, setStatus] = useState(null)
   const [observacao, setObservacao] = useState('')

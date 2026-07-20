@@ -5,6 +5,7 @@ import AssumirTurno from './pages/AssumirTurno.jsx'
 import Ronda from './pages/Ronda.jsx'
 import Estoque from './pages/Estoque.jsx'
 import Adesao from './pages/Adesao.jsx'
+import PendenciasEntreTurnos from './pages/PendenciasEntreTurnos.jsx'
 import Gestao from './pages/Gestao.jsx'
 
 // Estados: sessão do usuário Supabase da casa (DEC-019) e turno aberto (PIN).
@@ -17,6 +18,14 @@ export default function App() {
   const [gestao, setGestao] = useState(false)
   // Com turno aberto, a operação tem duas telas: a ronda e o estoque (Sessão #4).
   const [telaTurno, setTelaTurno] = useState('ronda')
+  // Doses vencidas em períodos sem turno aberto (Sessão #5.5 — BUG-002):
+  // contagem para a aba, que fica em alerta enquanto houver pendência.
+  const [pendencias, setPendencias] = useState(0)
+
+  const carregarPendencias = useCallback(async () => {
+    const { data, error } = await supabase.rpc('listar_pendencias_entre_turnos')
+    if (!error && data?.ok) setPendencias(data.total)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessao(data.session))
@@ -53,6 +62,10 @@ export default function App() {
       setGestao(false)
     }
   }, [sessao, carregarTurnoAberto])
+
+  useEffect(() => {
+    if (turno) carregarPendencias()
+  }, [turno, carregarPendencias])
 
   let conteudo
   if (sessao === undefined || (sessao && turno === undefined)) {
@@ -93,6 +106,17 @@ export default function App() {
           >
             Adesão
           </button>
+          {/* Pendências entre turnos (Sessão #5.5): a aba INTEIRA fica em
+              alerta enquanto houver pendência; neutra quando não há. */}
+          <button
+            type="button"
+            className={`aba aba-pendencias ${telaTurno === 'pendencias' ? 'aba-ativa' : ''} ${
+              pendencias > 0 ? 'aba-alerta' : ''
+            }`}
+            onClick={() => setTelaTurno('pendencias')}
+          >
+            Pendências entre turnos{pendencias > 0 ? ` (${pendencias})` : ''}
+          </button>
         </div>
         {telaTurno === 'ronda' && (
           <Ronda
@@ -105,6 +129,9 @@ export default function App() {
         )}
         {telaTurno === 'estoque' && <Estoque />}
         {telaTurno === 'adesao' && <Adesao />}
+        {telaTurno === 'pendencias' && (
+          <PendenciasEntreTurnos turno={turno} onMudanca={carregarPendencias} />
+        )}
       </>
     )
   }

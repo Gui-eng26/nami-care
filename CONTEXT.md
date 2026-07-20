@@ -1,12 +1,35 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-18 (fim da Sessão #5)
+> Última atualização: 2026-07-20 (fim da Sessão #5.5)
 
 ## Onde estamos
 
 **Fase atual:** Fase 3 — Implementação via Claude Code (MVP de produto
 COMPLETO; falta deploy/go-live)
+
+**Sessão #5.5 (2026-07-20) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_05_5.md`.
+Sessão curta dedicada ao **BUG-002** (dose vencida em período sem turno
+aberto era invisível — limite documentado na DEC-030). Entregas:
+- [x] Fila própria "Pendências entre turnos" (DEC-033): consulta
+      independente com teto de 5 dias + contagem de dias perdidos além do
+      teto; `doses_do_turno` intocada
+- [x] 4ª aba da operação, inteira vermelha com contagem enquanto houver
+      pendência; agrupamento dia → residente; tratativa individual pelo
+      MESMO modal da ronda (export, sem duplicar)
+- [x] Resolução em lote (DEC-034): novo status `pendente` ("não sabemos e
+      decidimos não apurar" ≠ `nao_tomado`), só alcançável pela RPC com PIN
+      do cuidador do turno + alerta de criticidade cheio de tela; sem
+      movimentação de estoque (reconciliação manual)
+- [x] `fechar_turno` exige as duas filas (dentro do teto) zeradas, com
+      mensagem distinguindo a origem; relatório de adesão com 5ª categoria
+      "Pendente (não apurado)" no denominador
+- [x] 1 migration nova (20260720000100) com smoke/rollback + bateria SQL
+      (A1–A9, B1–B11); critério de pronto (a)–(g) no navegador (375px);
+      build OK; advisors sem novidade não-intencional; seed resetado
+- [x] MH-002 (mostrar pendência antes de abrir o turno) — confirmada pelo
+      Guilherme na sessão e IMPLEMENTADA: aviso com contagem na tela de
+      assumir turno, antes do PIN (reusa a RPC; sem mudança de banco)
 
 **Sessão #5 (2026-07-18) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_05.md`. Entregas:
 - [x] Relatório de adesão (BRIEFING §6 item 10 — último item de produto do
@@ -120,6 +143,7 @@ Thais) e acompanhamento do início do piloto.
 
 ## Pendências operacionais
 
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_05_5.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** revisar RELATORIO_SESSAO_05.md, salvar no Drive, commit + push
 - [ ] **Guilherme:** teste funcional com `npm run seed -- --com-historico`
       antes do go-live (aba Adesão com 7 dias de dados; `--reset` para limpar)
@@ -143,7 +167,9 @@ Thais) e acompanhamento do início do piloto.
    PWA no celular da casa, cadastro dos dados reais (bootstrap da Thais
    como admin), última contagem manual como estoque inicial
 2. Piloto assistido: 1ª semana com acompanhamento próximo das 4 cuidadoras
-   (observar cobertura de turnos — limite documentado na DEC-030)
+   (lacunas de cobertura de turno agora são visíveis e tratáveis pela tela
+   "Pendências entre turnos" — BUG-002 corrigido na Sessão #5.5; observar o
+   uso real dela e explicar a diferença "não tomada" × "pendente")
 3. Backlog registrado: acuracidade de estoque (extrato de movimentações por
    período — candidata a sessão própria); motivo de recusa agregado por
    medicamento (ideia futura)

@@ -23,12 +23,16 @@ const ATALHOS = [
 
 // Rótulos legíveis para a cuidadora (padrão DEC-027). "Recusada" e "não
 // tomada" nunca se somam: uma é decisão do residente, a outra é falha
-// operacional — o sinal mais grave dos dois.
+// operacional — o sinal mais grave dos dois. "Pendente (não apurado)"
+// (DEC-034) também é categoria própria: não é confirmação de falta (seria
+// "não tomada") nem de ocorrência — é a decisão consciente de não apurar,
+// vinda da resolução em lote das pendências entre turnos.
 const CATEGORIAS = [
   { chave: 'no_horario', rotulo: 'No horário', cor: 'var(--cor-ok)' },
   { chave: 'atrasada', rotulo: 'Atrasadas', cor: 'var(--cor-alerta)' },
   { chave: 'recusada', rotulo: 'Recusadas', cor: 'var(--cor-erro)' },
-  { chave: 'nao_tomada', rotulo: 'Não tomadas', cor: '#7f1d1d' }
+  { chave: 'nao_tomada', rotulo: 'Não tomadas', cor: '#7f1d1d' },
+  { chave: 'nao_apurada', rotulo: 'Pendente (não apurado)', cor: '#78716c' }
 ]
 
 function fmtPct(pct) {
@@ -217,6 +221,14 @@ function ResultadoAdesao({ dados, rotuloPeriodo }) {
           </div>
         )
       })}
+
+      {dados.nao_apurada.qtd > 0 && (
+        <p className="adesao-legenda">
+          &ldquo;Pendente (não apurado)&rdquo;: doses de períodos sem turno aberto,
+          encerradas em lote na tela de pendências — não se confirmou se foram
+          dadas ou não.
+        </p>
+      )}
 
       {pendentes > 0 && (
         <p className="aviso aviso-alerta">

@@ -11,6 +11,10 @@ export default function AssumirTurno({ onTurnoAberto }) {
   const [selecionado, setSelecionado] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [trocandoPin, setTrocandoPin] = useState(false)
+  // MH-002: quem chega para o plantão vê ANTES do PIN que há doses de
+  // períodos sem turno aberto aguardando registro — o momento em que ainda
+  // dá para perguntar ao plantão anterior o que aconteceu.
+  const [pendencias, setPendencias] = useState(0)
 
   useEffect(() => {
     supabase
@@ -19,7 +23,21 @@ export default function AssumirTurno({ onTurnoAberto }) {
       .eq('ativo', true)
       .order('nome')
       .then(({ data, error }) => setCuidadores(error ? [] : data))
+    supabase.rpc('listar_pendencias_entre_turnos').then(({ data, error }) => {
+      if (!error && data?.ok) setPendencias(data.total)
+    })
   }, [])
+
+  const avisoPendencias = pendencias > 0 && (
+    <div className="card">
+      <p className="aviso aviso-erro">
+        Há {pendencias} dose{pendencias > 1 ? 's' : ''} de períodos sem turno
+        aberto aguardando registro. Ao assumir, resolva na aba &ldquo;Pendências
+        entre turnos&rdquo; — se possível, confirme com quem estava no plantão
+        anterior o que aconteceu.
+      </p>
+    </div>
+  )
 
   async function confirmarPin(pin) {
     setAviso(null)
@@ -52,17 +70,20 @@ export default function AssumirTurno({ onTurnoAberto }) {
 
   if (!selecionado) {
     return (
-      <div className="card">
-        <h2>Quem está assumindo o turno?</h2>
-        <div className="lista-cuidadores">
-          {cuidadores.map((c) => (
-            <button key={c.id} type="button" className="botao-cuidador" onClick={() => setSelecionado(c)}>
-              {c.nome}
-            </button>
-          ))}
-          {cuidadores.length === 0 && <p>Nenhum cuidador ativo cadastrado.</p>}
+      <>
+        {avisoPendencias}
+        <div className="card">
+          <h2>Quem está assumindo o turno?</h2>
+          <div className="lista-cuidadores">
+            {cuidadores.map((c) => (
+              <button key={c.id} type="button" className="botao-cuidador" onClick={() => setSelecionado(c)}>
+                {c.nome}
+              </button>
+            ))}
+            {cuidadores.length === 0 && <p>Nenhum cuidador ativo cadastrado.</p>}
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -76,32 +97,35 @@ export default function AssumirTurno({ onTurnoAberto }) {
   }
 
   return (
-    <div className="card">
-      <button
-        type="button"
-        className="botao-voltar"
-        onClick={() => {
-          setSelecionado(null)
-          setAviso(null)
-        }}
-      >
-        ← Trocar cuidador
-      </button>
-      <h2>PIN de {selecionado.nome}</h2>
-      <TecladoPin onConfirmar={confirmarPin} aviso={aviso} />
-      <div className="acoes-item">
+    <>
+      {avisoPendencias}
+      <div className="card">
         <button
           type="button"
-          className="botao-mini"
+          className="botao-voltar"
           onClick={() => {
+            setSelecionado(null)
             setAviso(null)
-            setTrocandoPin(true)
           }}
         >
-          Trocar meu PIN
+          ← Trocar cuidador
         </button>
+        <h2>PIN de {selecionado.nome}</h2>
+        <TecladoPin onConfirmar={confirmarPin} aviso={aviso} />
+        <div className="acoes-item">
+          <button
+            type="button"
+            className="botao-mini"
+            onClick={() => {
+              setAviso(null)
+              setTrocandoPin(true)
+            }}
+          >
+            Trocar meu PIN
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

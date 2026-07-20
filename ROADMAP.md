@@ -117,6 +117,31 @@ por residente, fronteira de fuso), bateria de 7 blocos + smoke com rollback.
 `--com-historico` · Leaked Password Protection ENCERRADA (indisponível no
 Free; mitigada — ver RELATORIO_SESSAO_05.md §5).
 
+## Sessão 5.5 — Pendências entre turnos (BUG-002) ✅ (2026-07-20)
+
+Sessão curta, um único problema: dose que vencia em período sem NENHUM turno
+aberto era invisível por construção (`doses_do_turno` é bounded pelo início
+do turno — limite que a DEC-030 documentava).
+
+- **Fila própria (DEC-033):** consulta independente com teto de 5 dias;
+  dias mais antigos apenas contados para o aviso de dado perdido;
+  `doses_do_turno` intocada.
+- **Tela "Pendências entre turnos":** 4ª aba, inteira vermelha com contagem
+  enquanto houver pendência; dia → residente; tratativa individual pelo
+  mesmo modal da ronda.
+- **Lote (DEC-034):** status novo `pendente` (≠ `nao_tomado`: "decidimos não
+  apurar"), só via RPC com PIN do cuidador do turno + alerta de criticidade
+  cheio de tela; sem baixa de estoque (reconciliação manual).
+- `fechar_turno` exige as duas filas; relatório de adesão com a 5ª categoria
+  "Pendente (não apurado)".
+
+**Critério de pronto atingido:** cenário completo (lacuna de 7,5 dias)
+verificado no navegador a 375px + bateria SQL sob rollback (20 blocos).
+
+**Pendências pós-sessão:** commit + push. (MH-002 — mostrar pendência antes
+de abrir o turno — foi confirmada e implementada na própria sessão: aviso
+com contagem na tela de assumir turno.)
+
 ## Sessão 6 — Deploy e go-live 🔜
 
 - Deploy do frontend no Railway (consolidando com a infra existente).
@@ -127,8 +152,9 @@ Free; mitigada — ver RELATORIO_SESSAO_05.md §5).
   residentes, prescrições, estoque inicial contado uma última vez à mão —
   a última contagem manual).
 - Ajustes de usabilidade a partir do teste no dispositivo real.
-- Acompanhamento da primeira semana de uso com a Thais (observar cobertura
-  de turnos — limite documentado na DEC-030).
+- Acompanhamento da primeira semana de uso com a Thais (lacunas de turno
+  agora visíveis na tela "Pendências entre turnos" — Sessão 5.5; treinar a
+  diferença "não tomada" × "pendente").
 
 **Critério de pronto:** casa operando no app, sem planilha e sem contagem
 manual.

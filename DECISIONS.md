@@ -563,7 +563,10 @@ superestimaria a adesão. **Limite conhecido hoje:** um slot que vence num
 intervalo em que nenhum turno está aberto não entra em turno nenhum — não é
 materializado, não aparece como pendente (nem na ronda, comportamento herdado
 da Sessão #2). No piloto a cobertura de turnos é contínua; risco registrado
-para o go-live.
+para o go-live. **[Atualização 2026-07-20: o limite virou o BUG-002 e foi
+corrigido na Sessão #5.5 — DEC-033/034: fila "Pendências entre turnos" com
+teto de 5 dias, e `fechar_turno` passou a exigir as duas filas. Este
+racional permanece válido para a `relatorio_adesao` em si.]**
 
 **Alternativas descartadas:** reconstruir a grade histórica a partir de
 `horarios` (quebraria com o versionamento da DEC-026, exigiria "grade vigente
@@ -605,3 +608,88 @@ item desativado (visível, sem alerta).
 ronda e das agregações novas via `doses_do_turno`), nunca o passado — apagar
 o histórico da macro faria os totais de períodos fechados mudarem
 retroativamente, violando o princípio de auditoria (DEC-017).
+
+---
+
+## DEC-033 — Pendências entre turnos: fila própria com teto de 5 dias
+**Data:** 2026-07-20 | **Status:** aprovada (Sessão #5.5; corrige o BUG-002)
+
+**Contexto (BUG-002):** `doses_do_turno` delimita a busca por
+`[turno.inicio, agora]`. Uma dose que vence num período em que NENHUM turno
+está aberto (madrugada sem plantão registrado no app, cuidadora esqueceu de
+abrir) não entra na consulta de turno algum: não aparece como pendente nem
+atrasada — invisível por construção — e some do denominador do relatório de
+adesão. O limite já estava documentado na DEC-030; virou correção porque uma
+dose real pode ter sido dada ou não sem que ninguém seja avisado de revisar.
+
+**Decisão:** essas doses NÃO entram na ronda — `doses_do_turno` permanece
+intocada, bounded por `turno.inicio` (misturar juntaria "meu trabalho deste
+turno" com "problema de um turno que não existiu"). Elas vão para uma fila
+própria, a tela **"Pendências entre turnos"**, alimentada pela consulta
+independente `fn_pendencias_entre_turnos` / RPC `listar_pendencias_entre_turnos`:
+dose vencida (`prevista_em <= agora`) de medicamento contínuo com
+horário/medicamento/residente ativos, sem `administracao`, cujo instante não
+foi coberto por nenhum intervalo `[inicio, fim ou agora]` de turno. Limites:
+a partir do primeiro turno da casa (antes disso o app não operava) e a partir
+do `criado_em` do horário (linha versionada pela DEC-026 não gera pendência
+retroativa). SOS fica fora: sem grade planejada, não há pendência (DEC-014).
+
+**Teto de 5 dias:** a fila só materializa pendências dos últimos 5 dias
+(janela móvel de 120 h). Dos dias mais antigos o app apenas CONTA quantos
+dias têm pendência não coberta, para um aviso permanente de dado perdido.
+**Racional:** evitar reconstruir um histórico ilimitado (custo e ilegibilidade
+crescentes de uma lista de centenas de doses antigas que ninguém consegue mais
+apurar com honestidade). **Consequência assumida:** dado com mais de 5 dias
+não é mais tratável pelo app — nem individualmente, nem em lote; fica fora do
+relatório de adesão para sempre, e eventual divergência de estoque desses dias
+se resolve só por ajuste manual de contagem.
+
+**UX:** aba junto de Ronda | Estoque | Adesão, visível com turno aberto; a aba
+INTEIRA fica vermelha (cor de alerta, não só um selo) com a contagem de doses
+entre parênteses enquanto houver pendência, e neutra sem contagem quando não
+há — decisão nova desta sessão, não desenhada antes. Lista agrupada por dia
+(mais antigo primeiro) e, dentro do dia, por residente. Tratativa individual
+reutiliza o MESMO modal da ronda (mesmas quatro opções, mesmo insert).
+`fechar_turno` passa a exigir as DUAS filas resolvidas (dentro do teto), com
+mensagem distinguindo a origem do bloqueio.
+
+---
+
+## DEC-034 — Resolução em lote com status `pendente` (PIN + alerta de criticidade)
+**Data:** 2026-07-20 | **Status:** aprovada (Sessão #5.5)
+
+**Decisão:** a tela de pendências tem um botão único — "Resolver pendências
+em lote" — que encerra de uma vez tudo o que ainda está sem tratativa na
+lista (dentro do teto da DEC-033), gravando administrações com o novo status
+**`pendente`**.
+
+**Semântica do status (não confundir nunca):** `nao_tomado` é a CONFIRMAÇÃO
+de que a dose não foi dada; `pendente` é "não sabemos o que aconteceu, e
+decidimos conscientemente não apurar". Por isso: (1) no relatório de adesão é
+categoria própria — "Pendente (não apurado)" — que entra no denominador mas
+nunca se soma a "não tomada" (mentiria confirmando a falta) nem às tomadas
+(mentiria confirmando a ocorrência); (2) não gera NENHUMA movimentação de
+estoque (mesmo comportamento de `nao_tomado` no trigger de baixa) — a
+reconciliação é manual, via `registrar_ajuste_estoque` (Sessão #4), exatamente
+como o alerta avisa; (3) o status só nasce da RPC de lote
+(`resolver_pendencias_em_lote`) — um trigger de guarda bloqueia INSERT direto
+com `pendente`, e o modal individual NÃO oferece a opção: quem trata dose a
+dose está confirmando o que aconteceu.
+
+**Autorização:** antes de gravar, um alerta de criticidade cheio de tela
+(difícil de ignorar, não um toast) explicita os dois impactos — no espírito
+de: "Você está prestes a encerrar N dose(s) sem tratativa individual. Isso
+vai impactar diretamente a taxa de adesão dos residentes no relatório e pode
+gerar divergência na contagem de estoque — ajustes de estoque relacionados a
+essas doses precisarão ser feitos manualmente depois, pela tela de Estoque."
+A confirmação exige o **PIN do próprio cuidador do turno aberto**, verificado
+no banco (`fn_verificar_pin`, com o rate limit da DEC-021) — reafirmação de
+identidade para autorizar uma ação de impacto, mesmo padrão de reverificação
+do `trocar_pin` (DEC-025), não troca de credencial. O lote cobre apenas o que
+restar sem tratativa no momento do clique: o que já foi tratado
+individualmente fica de fora (UNIQUE de slot + NOT EXISTS da fila).
+
+**Alternativas descartadas:** reusar `nao_tomado` no lote (destruiria a
+distinção falta confirmada × não apurado); quinta opção "pendente" no modal
+individual (a tratativa individual é justamente o caminho de apuração);
+lote sem PIN (ação de maior impacto agregado do sistema ficaria a um toque).
