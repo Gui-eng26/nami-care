@@ -96,7 +96,11 @@ export default function App() {
   } else if (gestao === 'equipe') {
     conteudo = <Gestao onSair={sairDaGestao} />
   } else if (!turno) {
-    conteudo = <AssumirTurno onTurnoAberto={setTurno} />
+    // Recarrega em vez de aproveitar o turno devolvido por abrir_turno: aquele
+    // payload não tem eh_admin (e não deve ter — é a RPC do PIN, não a da UI).
+    // Assim o objeto do turno é montado num lugar só e a home logo após assumir
+    // o turno é idêntica à de depois de recarregar a página.
+    conteudo = <AssumirTurno onTurnoAberto={carregarTurnoAberto} />
   } else if (telaTurno === 'pendencias') {
     conteudo = (
       <>

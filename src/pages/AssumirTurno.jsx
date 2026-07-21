@@ -50,7 +50,9 @@ export default function AssumirTurno({ onTurnoAberto }) {
       return
     }
     if (data.ok) {
-      onTurnoAberto(data.turno)
+      // Quem monta o objeto do turno é o App (uma fonte só) — aqui basta avisar
+      // que há turno aberto.
+      onTurnoAberto()
       return
     }
     if (data.erro === 'turno_aberto_outro_cuidador') {
