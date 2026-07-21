@@ -1,13 +1,30 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-21 (fim da Sessão #8)
+> Última atualização: 2026-07-21 (fim da Sessão #9)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #9 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_09.md`. Sessão
+curta de DADOS (nenhuma linha de `src/`, migration, RPC ou tela), para a
+demonstração ao vivo do app à Thais:
+- [x] **`npm run seed-demo`** (flag `--demo` no seed + `scripts/seed-demo.js`):
+      cenário de casa em operação sobre o banco de TESTE — histórico de adesão
+      D-6..D-1, turno aberto agora, lacuna de turno em D-3 que acende a faixa
+      vermelha de "Pendências entre turnos", e doses na **janela do horário em
+      que o script roda** (−85 min a +110 min relativos ao `now()`, nunca
+      horário fixo), com tratadas + atrasada + na hora + a vencer
+- [x] Reexecutável: rodar de novo recompõe tudo com a janela recalculada
+- [x] Escrita toda pelas RPCs reais; ajustes diretos só de DATA (turnos e
+      `horarios.criado_em`), mesma tolerância documentada no `seed-historico`
+- [x] Critério de pronto (1)–(6) conferido no navegador a 375px; build OK
+- [x] **O banco ficou POVOADO de propósito** — dados fictícios de demo
+- [ ] ⚠️ **`npm run limpar-banco` do go-live AINDA PRECISA RODAR depois da
+      conversa**, antes de qualquer dado real. A demo não é o piloto
 
 **Sessão #8 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_08.md`. Primeira
 sessão pós-MVP, a partir do teste real do PWA no celular. Quatro entregas:
@@ -29,6 +46,14 @@ sessão pós-MVP, a partir do teste real do PWA no celular. Quatro entregas:
       "Gestão residentes" (todas) e "Gestão equipe" (só admin, ainda com PIN) no
       header; pendências entre turnos viraram faixa de alerta que só existe com
       pendência; abas = Ronda, Adesão, Estoque
+- [x] **BUG-003 corrigido na mesma sessão** (achado pelo Guilherme no celular,
+      após a entrega): "Gestão equipe" não aparecia para a admin logo depois de
+      ela assumir o turno — só depois de entrar e sair da gestão. Causa: DOIS
+      lugares montavam o objeto do turno, e o payload da RPC `abrir_turno` não
+      tem (nem deve ter) `eh_admin`. Correção: o App recarrega o turno do banco
+      ao abri-lo; `setTurno` passa a receber o objeto de um lugar só.
+      **Invariante:** campo novo que a UI precise do turno entra em
+      `carregarTurnoAberto` (`App.jsx`), nunca no retorno de uma RPC de operação
 - [x] 1 migration nova (20260721000100) com smoke/rollback + bateria SQL;
       critério de pronto (1)–(9) no navegador (375px); build OK; advisors sem
       categoria nova; seed resetado limpo
@@ -219,7 +244,10 @@ necessidade de negócio — acompanhamento de movimentação de estoque — que
 entra no MVP como **Sessão #6**. Ver `SESSAO_06.md`. O deploy/go-live
 (escopo que estava previsto aqui) vira **Sessão #7**.
 
-**Próximo passo (inalterado pela Sessão #8):** não é uma sessão de código — são
+**Próximo passo (inalterado pelas Sessões #8 e #9 — a demo da #9 povoou o banco
+de TESTE com dados fictícios e não substitui nenhum passo abaixo; o
+`npm run limpar-banco` do passo 5 continua obrigatório antes dos dados reais):**
+não é uma sessão de código — são
 os **passos 4 a 8 do runbook
 de go-live** (§6 do `RELATORIO_SESSAO_07.md`), pelo Guilherme com a Thais:
 instalar no celular da casa, limpar o banco de teste, bootstrap da Thais,
@@ -230,6 +258,9 @@ MVP entra em piloto.
 
 ## Pendências operacionais
 
+- [ ] ⚠️ **Guilherme:** o banco de teste está POVOADO com o cenário de
+      demonstração da Sessão #9 (dados fictícios). Rodar `npm run limpar-banco`
+      (passo 5 do runbook) antes de cadastrar qualquer dado real da casa
 - [ ] **Guilherme + Thais:** executar os passos 4–8 do runbook de go-live
       (`RELATORIO_SESSAO_07.md` §6) — instalação no celular, limpeza do banco,
       bootstrap da Thais, dados reais. Passos 1–3 (publicar, Railway, URLs do
@@ -241,7 +272,7 @@ MVP entra em piloto.
 - [ ] Acompanhar no piloto: mudar prescrição no meio do dia versiona (DEC-026) e
       faz o slot novo pedir tratativa naquele mesmo dia — comportamento antigo,
       mas que ficará muito mais visível agora que a edição é da cuidadora do
-      turno (ver `RELATORIO_SESSAO_08.md` §5)
+      turno (ver `RELATORIO_SESSAO_08.md` §6)
 - [ ] "Medicamento da casa" (SOS sem residente vinculado) — postergado na
       Sessão #8: `medicamentos.idoso_id` é NOT NULL; exige decisão e sessão
       próprias

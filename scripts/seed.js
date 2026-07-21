@@ -6,6 +6,10 @@
 //   npm run seed -- --com-historico  — reset + ~7 dias de histórico de administrações
 //                                      para testar o relatório de adesão (Sessão #5);
 //                                      deixa um turno ABERTO com doses pendentes
+//   npm run seed-demo                — reset + cenário de DEMONSTRAÇÃO (Sessão #9):
+//                                      histórico de adesão, lacuna de turno que
+//                                      acende as "Pendências entre turnos" e doses
+//                                      na janela do horário em que o script rodar
 //
 // Requer em .env.local (carregado via --env-file no script npm):
 //   VITE_SUPABASE_URL            — URL do projeto
@@ -14,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { cuidadores, idosos, medicamentos } from './seed-data.js'
 import { gerarHistorico } from './seed-historico.js'
+import { gerarDemo } from './seed-demo.js'
 
 const url = process.env.VITE_SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -65,7 +70,10 @@ async function main() {
   // --com-historico sempre parte do zero: o histórico referencia horários e
   // turnos específicos e não pode ser sobreposto a dados existentes.
   const comHistorico = process.argv.includes('--com-historico')
-  if (process.argv.includes('--reset') || comHistorico) {
+  // --demo (npm run seed-demo) também parte do zero e é REEXECUTÁVEL: rodar de
+  // novo recompõe o cenário com a janela recalculada para o novo horário.
+  const demo = process.argv.includes('--demo')
+  if (process.argv.includes('--reset') || comHistorico || demo) {
     await resetar()
   } else if (await bancoTemDados()) {
     console.error('O banco já tem dados. Use `npm run seed -- --reset` para repopular.')
@@ -165,6 +173,10 @@ async function main() {
 
   if (comHistorico) {
     await gerarHistorico(supabase, falhar)
+  }
+
+  if (demo) {
+    await gerarDemo(supabase, falhar)
   }
 }
 

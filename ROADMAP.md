@@ -248,6 +248,12 @@ do cadastro de medicamento, sem perder auditoria nem integridade clínica.
   faixa de alerta que só existe quando há pendência; abas = Ronda, Adesão,
   Estoque.
 
+- **BUG-003 (achado e corrigido na mesma sessão):** "Gestão equipe" não aparecia
+  para a administradora logo após ela assumir o turno — só depois de entrar e
+  sair da gestão de residentes. O objeto do turno era montado em dois lugares, e
+  o payload da RPC `abrir_turno` não carrega `eh_admin`. O App passou a recarregar
+  o turno do banco ao abri-lo: uma fonte só para o formato do turno.
+
 1 migration nova (20260721000100) com smoke/rollback e bateria SQL; critério de
 pronto (1)–(9) no navegador a 375px, nos dois perfis; build OK; advisors sem
 categoria nova; seed resetado. **Nada do go-live foi tocado.**

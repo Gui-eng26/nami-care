@@ -110,3 +110,9 @@ cadastro (catálogo da DEC-035) + o estoque inicial da Parte 2. Mesma
 7. Mesmo resultado pelo caminho de Residentes.
 8. Home reorganizada conforme a Parte 4.
 9. `npm run build` sem erro; sem regressão; advisors sem novidade não explicada.
+
+## Acrescentado durante a sessão
+
+- **BUG-003** — "Gestão equipe" invisível para a administradora logo após ela
+  assumir o turno (achado pelo Guilherme no celular, depois da entrega das
+  quatro partes). Corrigido na mesma sessão; ver `RELATORIO_SESSAO_08.md` §5.

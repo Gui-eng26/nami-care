@@ -28,6 +28,10 @@ entregas, todas concluídas:
 1 migration nova, aplicada após smoke test com rollback. `npm run build` OK.
 Advisors sem categoria nova. Seed resetado ao final.
 
+**BUG-003 encontrado e corrigido na própria sessão** (achado pelo Guilherme no
+celular, depois da entrega inicial): o botão "Gestão equipe" não aparecia para a
+administradora logo após ela assumir o turno — detalhe em §5.
+
 **Nada do go-live foi tocado:** o runbook da Sessão #7 segue pendente e o banco
 continua com o seed de teste, como o roteiro determinou.
 
@@ -156,7 +160,47 @@ em `tentativas_pin` (tabela sem acesso de cliente, por desenho), policy de INSER
 permissiva em `administracoes` (a regra real está nos triggers) e Leaked Password
 Protection (indisponível no plano Free — encerrada na Sessão #5).
 
-## 5. Observação de comportamento
+## 5. BUG-003 — "Gestão equipe" invisível para a admin logo após assumir o turno
+
+**Sintoma (achado pelo Guilherme no celular, com a entrega já feita):** Ana Souza
+é administradora, mas ao assumir o turno o header mostrava só "Gestão
+residentes". Fechar e reabrir o app não resolvia. **Entrar em "Gestão
+residentes" e voltar por "Sair da gestão" fazia o botão aparecer** — e foi essa
+observação que fechou o diagnóstico.
+
+**Causa:** havia **dois lugares montando o objeto do turno**, com formatos
+diferentes.
+
+| Caminho | Origem do objeto | Tem `eh_admin`? |
+|---|---|---|
+| Assumir turno | payload `turno` devolvido pela RPC `abrir_turno` | **não** |
+| Carregar a página / sair da gestão | `carregarTurnoAberto()`, que lê `turnos` com `cuidadores (nome, eh_admin)` | sim |
+
+A Parte 1 desta sessão acrescentou `eh_admin` só ao segundo caminho. Quem
+assumia o turno ficava com um objeto sem o campo, e a condição do botão dava
+falso. Reabrir o app não ajudava porque o fluxo voltava para a tela de assumir
+turno e refazia o mesmo caminho; já "Sair da gestão" chama
+`carregarTurnoAberto()`, que recompunha o objeto completo.
+
+**Correção:** o App passou a recarregar o turno do banco depois de aberto
+(`onTurnoAberto={carregarTurnoAberto}`) e o `AssumirTurno` apenas avisa que
+abriu, sem montar objeto nenhum. **`setTurno` agora recebe o objeto de um lugar
+só** — o que elimina a classe do defeito, não apenas este campo.
+
+A RPC `abrir_turno` **não** foi alterada: ela é a porta do PIN (DEC-020/021),
+não a fonte dos dados de apresentação. Misturar as duas responsabilidades foi
+justamente o que criou o bug.
+
+**Invariante para as próximas sessões:** o formato do turno é definido em um
+único lugar (`carregarTurnoAberto`, em `App.jsx`). Campo novo que a UI precise
+do turno entra ali — nunca no retorno de uma RPC de operação.
+
+**Nota de conduta:** durante a conferência desta correção, o assistente clicou
+em "Encerrar turno" no banco de seed enquanto o Guilherme testava no celular,
+encerrando um turno dele. Sem perda de dado real (banco de teste), mas registrado
+por transparência.
+
+## 6. Observação de comportamento
 
 Ao versionar um horário, o slot novo passa a valer **para o dia inteiro** — na
 conferência, mudar a dose das 08:00 fez a dose das 08:00 de hoje reaparecer como
@@ -168,7 +212,7 @@ prescrição no meio do dia pede uma tratativa a mais naquele dia.** Se incomoda
 no piloto, é candidato a decisão própria (ex.: versionar valendo a partir do dia
 seguinte).
 
-## 6. Pendências
+## 7. Pendências
 
 **Herdadas, sem alteração nesta sessão:**
 
@@ -185,4 +229,4 @@ seguinte).
 - "Medicamento da casa" (SOS sem residente vinculado) segue **postergado**:
   `medicamentos.idoso_id` é NOT NULL e o conceito mexeria no ledger e na ronda.
   Decisão e sessão próprias.
-- Observação da §5 (versionamento no meio do dia) para acompanhar no piloto.
+- Observação da §6 (versionamento no meio do dia) para acompanhar no piloto.
