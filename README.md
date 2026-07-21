@@ -56,8 +56,24 @@ operacional.
 | Frontend | React (PWA, mobile-first) |
 | Backend / BD | Supabase (Postgres, Auth, Row Level Security) |
 | Baixa automática de estoque | Trigger no Postgres (ver DEC-008) |
+| Hospedagem | Railway — build estático do Vite servido por processo Node (DEC-007/037) |
 
 Sem servidor próprio nem cron: a agenda de rodadas é consulta em tempo real.
+
+## Comandos
+
+Os scripts que falam com o banco leem `.env.local` (ver `.env.example`).
+
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | Servidor de desenvolvimento (Vite) |
+| `npm run build` | Build de produção em `dist/` |
+| `npm run start` | Serve `dist/` como estático — o mesmo comando que roda no Railway |
+| `npm run icones` | Gera os ícones do PWA a partir de `public/icons/logo-serenissima.png` |
+| `npm run seed` | Popula o banco com dados de teste (`-- --reset`, `-- --com-historico`) |
+| `npm run criar-usuario-casa` | Cria o usuário Supabase único da casa (DEC-019) |
+| `npm run limpar-banco` | Apaga todos os dados **sem repopular** — passo do go-live |
+| `npm run criar-admin` | Bootstrap da primeira administradora (DEC-024), PIN digitado por ela |
 
 ## Documentação
 
@@ -69,6 +85,7 @@ para qualquer sessão de trabalho (humana ou com Claude Code):
 | [`BRIEFING.md`](./BRIEFING.md) | Visão geral, modelo de dados, regras de negócio, escopo do MVP |
 | [`DECISIONS.md`](./DECISIONS.md) | Decisões arquiteturais e de produto, com racional (DEC-001+) |
 | [`CONTEXT.md`](./CONTEXT.md) | Estado atual do projeto e próximos passos |
+| [`ROADMAP.md`](./ROADMAP.md) | Visão do todo, sessão a sessão |
 
 **Antes de qualquer sessão de desenvolvimento, leia os três arquivos.**
 

@@ -174,22 +174,43 @@ ordenação pelo pior caso do grupo, sinal do ajuste, filtro de subtipo).
 
 **Pendências pós-sessão:** commit + push.
 
-## Sessão 7 — Deploy e go-live 🔜
+## Sessão 7 — Deploy e go-live ⏳ (2026-07-21) — preparação concluída
 
-- Deploy do frontend no Railway (consolidando com a infra existente).
-- Configurar URLs permitidas no Supabase Auth para o domínio de produção.
-- Ícones PNG 192/512 do PWA e instalação no celular compartilhado da casa.
-- Termo LGPD com a casa ANTES dos dados reais.
-- Cadastro dos dados reais (bootstrap da Thais como admin, cuidadoras,
-  residentes, prescrições — via o catálogo novo da Sessão #6 —, estoque
-  inicial contado uma última vez à mão — a última contagem manual).
-- Ajustes de usabilidade a partir do teste no dispositivo real.
-- Acompanhamento da primeira semana de uso com a Thais (lacunas de turno
-  agora visíveis na tela "Pendências entre turnos" — Sessão 5.5; treinar a
-  diferença "não tomada" × "pendente").
+Última sessão de código do MVP planejado. Sessão de infraestrutura, sem
+nenhuma mudança de produto: Ronda, turno, Pendências entre turnos, Adesão,
+Estoque (atual e extrato), gestão e catálogo ficaram intocados.
 
-**Critério de pronto:** casa operando no app, sem planilha e sem contagem
-manual.
+- **Produção reprodutível pelo repositório (DEC-037):** `railway.json` (build
+  + start), `.node-version`, `npm run start` servindo `dist/` como estático em
+  modo SPA — o dev server do Vite não roda em produção. Fronteira de segredos:
+  só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no serviço público;
+  service role e `CASA_*` seguem restritos a script local.
+- **PWA instalável:** ícones PNG 192/512 (any e maskable) + apple-touch-icon e
+  favicon, gerados do logo real da casa por `npm run icones` — símbolo isolado
+  (casinha, casal e coração) sobre o creme da identidade, porque a 192px o
+  texto do logo horizontal fica ilegível. Manifest atualizado e conferido no
+  build servido; placeholders SVG teal da Sessão #1 removidos.
+- **Ferramental do go-live:** `npm run limpar-banco` (apaga o seed de teste sem
+  repopular — o `seed --reset` reinsere dados fictícios, o que não pode
+  acontecer em produção) e `npm run criar-admin` (bootstrap da primeira
+  administradora, DEC-024: PIN digitado pela própria pessoa sem eco na tela,
+  hash gerado no banco por `fn_hash_pin`).
+- **Achado (DEC-037):** o app usa só `signInWithPassword` — Site URL e Redirect
+  URLs **não bloqueiam** o login pela URL do Railway. Cadastrar a URL segue
+  recomendado como higiene, mas não é pré-requisito do go-live.
+
+**Verificado:** build de produção servido pelo mesmo comando do Railway, a
+375px — manifest, os 4 ícones e o service worker em 200, SW registrado, console
+limpo, tema preservado; guardas dos dois scripts novos testadas contra o banco
+real sem escrever nada. Advisors sem novidade não intencional.
+
+**Aberto — execução operacional, não código** (runbook em
+`RELATORIO_SESSAO_07.md` §6): criar o serviço no Railway e obter a URL;
+limpar o banco e cadastrar os dados reais pela tela de gestão; instalar no
+celular da casa.
+
+**Critério de pronto do MVP:** casa operando no app, sem planilha e sem
+contagem manual — **ainda não atingido**: depende do runbook acima.
 
 ---
 

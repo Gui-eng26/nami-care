@@ -7,16 +7,22 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "serve -s dist -l ${PORT:-4173}",
+    "icones": "node scripts/gerar-icones.js",
     "seed": "node --env-file=.env.local scripts/seed.js",
-    "criar-usuario-casa": "node --env-file=.env.local scripts/criar-usuario-casa.js"
+    "criar-usuario-casa": "node --env-file=.env.local scripts/criar-usuario-casa.js",
+    "criar-admin": "node --env-file=.env.local scripts/criar-admin.js",
+    "limpar-banco": "node --env-file=.env.local scripts/limpar-banco.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "serve": "^14.2.6"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "sharp": "^0.35.3",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.0"
   }

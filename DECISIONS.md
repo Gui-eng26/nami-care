@@ -793,3 +793,42 @@ Estoque, com outra função); consolidar por nome de medicamento via texto
 cobertura/saldo no cliente (duplicaria regra de negócio que já vive na view);
 cor por tipo em vez de sinal (classificaria errado o `ajuste_contagem`, que é
 bidirecional).
+
+---
+
+## DEC-037 — Produção: build estático do Vite servido por processo Node no Railway
+**Data:** 2026-07-21 | **Status:** aprovada (preparada na Sessão #7)
+
+**Decisão:** em produção o Railway roda **dois comandos distintos** — build
+(`npm run build`, que gera `dist/`) e serve (`npm run start`, que serve `dist/`
+com o pacote `serve` em modo SPA, na porta de `$PORT`). O dev server do Vite
+NUNCA roda em produção. A configuração fica versionada em `railway.json`
+(builder NIXPACKS, `buildCommand`, `startCommand`, restart em falha) e a versão
+do Node em `.node-version`, para que o deploy seja reprodutível a partir do
+repositório e não de cliques no painel.
+
+**Fronteira de segredos:** o serviço de frontend recebe **apenas**
+`VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` — tudo que tem prefixo `VITE_` é
+embutido no bundle e é público por construção. `SUPABASE_SERVICE_ROLE_KEY` e as
+credenciais `CASA_*` são de script local (seed, bootstrap) e nunca entram em
+variável do serviço público.
+
+**Racional:** o app é 100% estático depois do build (a regra de negócio vive no
+Supabase — não há backend próprio, DEC-007/BRIEFING §4). `serve -s` dá o
+fallback de SPA e é JavaScript, coerente com a linguagem única (DEC-015), sem
+introduzir Caddy/nginx nem uma segunda plataforma. Deixar build e serve
+separados evita o erro clássico de subir o dev server do Vite em produção
+(lento, sem cache, sem os arquivos do PWA gerados).
+
+**Sobre o Supabase Auth:** verificado nesta sessão que o app usa apenas
+`signInWithPassword` — sem magic link, OAuth ou recuperação de senha. O endpoint
+de Auth responde a qualquer origem (`access-control-allow-origin` ecoa a origem
+enviada), então **Site URL e Redirect URLs não bloqueiam o login** a partir da
+URL do Railway. Cadastrar a URL de produção no Auth continua recomendado como
+higiene (vale para qualquer fluxo por e-mail que venha a ser usado), mas não é
+pré-requisito do go-live.
+
+**Alternativas descartadas:** `vite preview` como comando de produção (é
+ferramenta de conferência local, sem garantias de produção); servidor estático
+em Caddy/nginx (mais uma stack para manter, sem ganho no piloto); host estático
+separado, ex. Vercel (descartado na DEC-007).
