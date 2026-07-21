@@ -28,6 +28,14 @@ export default function App() {
   // Doses vencidas em períodos sem turno aberto (Sessão #5.5 — BUG-002):
   // contagem da faixa de alerta, que só existe enquanto houver pendência.
   const [pendencias, setPendencias] = useState(0)
+  // Encerramento do turno (Sessão #10): o botão vive no cabeçalho, então a
+  // chamada de fechar_turno vive aqui — a cuidadora encerra de qualquer aba.
+  // A LÓGICA de fechamento não mudou: é a mesma RPC, com a mesma recusa.
+  const [fechando, setFechando] = useState(false)
+  const [avisoFechamento, setAvisoFechamento] = useState(null)
+  // Incrementado quando o fechamento é recusado: faz a Ronda reler a agenda,
+  // para a cuidadora ver na hora o que o banco disse que falta tratar.
+  const [recargaRonda, setRecargaRonda] = useState(0)
 
   const carregarPendencias = useCallback(async () => {
     const { data, error } = await supabase.rpc('listar_pendencias_entre_turnos')
@@ -82,6 +90,57 @@ export default function App() {
     carregarTurnoAberto()
   }
 
+  // Troca de aba pelo menu: limpa o aviso de fechamento para não deixar tarja
+  // vermelha velha na tela depois que a cuidadora já foi resolver o que faltava.
+  function irPara(tela) {
+    setAvisoFechamento(null)
+    setTelaTurno(tela)
+  }
+
+  // Encerrar turno (Sessão #10) — mesma `fechar_turno` de sempre: quem recusa
+  // com dose sem tratativa é o banco (DEC-010/DEC-022/DEC-033), não a tela.
+  // A única novidade é de navegação: como o botão agora é alcançável de
+  // Estoque e Adesão, a recusa LEVA a cuidadora até a fila que a bloqueou, em
+  // vez de deixá-la numa aba onde não há o que resolver.
+  async function encerrarTurno() {
+    setFechando(true)
+    setAvisoFechamento(null)
+    const { data, error } = await supabase.rpc('fechar_turno', { p_turno_id: turno.id })
+    setFechando(false)
+    if (error) {
+      setAvisoFechamento('Falha ao encerrar o turno. Tente novamente.')
+      return
+    }
+    if (data.ok) {
+      setTurno(null)
+      setTelaTurno('ronda')
+      return
+    }
+    if (data.erro === 'doses_pendentes') {
+      // O bloqueio pode vir de duas filas (Sessão #5.5): doses deste turno
+      // (ronda) e pendências de períodos sem turno aberto (tela própria).
+      const partes = []
+      if (data.total_ronda > 0) {
+        partes.push(`${data.total_ronda} dose(s) deste turno sem tratativa (na Ronda)`)
+      }
+      if (data.total_entre_turnos > 0) {
+        partes.push(
+          `${data.total_entre_turnos} pendência(s) de períodos sem turno aberto ("Pendências entre turnos")`
+        )
+      }
+      setAvisoFechamento(
+        `Ainda há ${partes.join(' e ')}. Resolva tudo antes de encerrar o turno.`
+      )
+      // Leva para onde está o que resolver: a ronda tem prioridade porque é o
+      // trabalho do turno corrente; se o bloqueio é só da outra fila, abre ela.
+      setTelaTurno(data.total_ronda > 0 ? 'ronda' : 'pendencias')
+      setRecargaRonda((n) => n + 1)
+      carregarPendencias()
+    } else {
+      setAvisoFechamento('Não foi possível encerrar o turno.')
+    }
+  }
+
   let conteudo
   if (sessao === undefined || (sessao && turno === undefined)) {
     conteudo = (
@@ -107,7 +166,7 @@ export default function App() {
         <button
           type="button"
           className="botao-voltar"
-          onClick={() => setTelaTurno('ronda')}
+          onClick={() => irPara('ronda')}
         >
           ← Voltar
         </button>
@@ -133,7 +192,7 @@ export default function App() {
           <button
             type="button"
             className={`aba ${telaTurno === 'ronda' ? 'aba-ativa' : ''}`}
-            onClick={() => setTelaTurno('ronda')}
+            onClick={() => irPara('ronda')}
           >
             Ronda
           </button>
@@ -141,27 +200,19 @@ export default function App() {
           <button
             type="button"
             className={`aba ${telaTurno === 'adesao' ? 'aba-ativa' : ''}`}
-            onClick={() => setTelaTurno('adesao')}
+            onClick={() => irPara('adesao')}
           >
             Adesão
           </button>
           <button
             type="button"
             className={`aba ${telaTurno === 'estoque' ? 'aba-ativa' : ''}`}
-            onClick={() => setTelaTurno('estoque')}
+            onClick={() => irPara('estoque')}
           >
             Estoque
           </button>
         </div>
-        {telaTurno === 'ronda' && (
-          <Ronda
-            turno={turno}
-            onTurnoFechado={() => {
-              setTurno(null)
-              setTelaTurno('ronda')
-            }}
-          />
-        )}
+        {telaTurno === 'ronda' && <Ronda turno={turno} recarga={recargaRonda} />}
         {telaTurno === 'adesao' && <Adesao />}
         {telaTurno === 'estoque' && <Estoque />}
       </>
@@ -175,14 +226,33 @@ export default function App() {
   const podeResidentes = !!turno
   const podeEquipe = !turno || turno.eh_admin
 
+  // "Encerrar turno" (Sessão #10) fica no cabeçalho, e não mais dentro da aba
+  // Ronda: navegando por Estoque ou Adesão, a cuidadora tentava encerrar e
+  // precisava voltar à Ronda primeiro — atrito observado no uso real.
+  const mostrarEncerrar = !!turno && !gestao
+
   return (
     <div className="app">
       <header className="app-header">
-        <div className="app-header-titulo">
-          <h1>Sereníssima</h1>
-          <p>Gestão de medicação</p>
-          {turno && !gestao && (
-            <p className="app-header-cuidadora">Turno de {turno.cuidador_nome}</p>
+        <div className="app-header-topo">
+          <div className="app-header-titulo">
+            <h1>Sereníssima</h1>
+            <p>Gestão de medicação</p>
+            {turno && !gestao && (
+              <p className="app-header-cuidadora">Turno de {turno.cuidador_nome}</p>
+            )}
+          </div>
+          {/* Ação de SAÍDA: destacada e separada dos botões de gestão logo
+              abaixo, que abrem áreas. Não competem visualmente. */}
+          {mostrarEncerrar && (
+            <button
+              type="button"
+              className="botao-encerrar-turno"
+              onClick={encerrarTurno}
+              disabled={fechando}
+            >
+              {fechando ? 'Encerrando…' : 'Encerrar turno'}
+            </button>
           )}
         </div>
         <div className="app-header-acoes">
@@ -211,7 +281,12 @@ export default function App() {
           )}
         </div>
       </header>
-      <main className="app-main">{conteudo}</main>
+      <main className="app-main">
+        {/* Recusa do fechamento: fica logo abaixo do cabeçalho, junto da tela
+            para onde a cuidadora acabou de ser levada. */}
+        {avisoFechamento && <p className="aviso aviso-erro aviso-fechamento">{avisoFechamento}</p>}
+        {conteudo}
+      </main>
     </div>
   )
 }

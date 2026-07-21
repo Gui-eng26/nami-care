@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
+import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
 
 // Atalho "+ Medicamento" da aba Estoque (Sessão #8): mesma porta de sempre —
@@ -51,16 +52,25 @@ export default function NovoMedicamento({ onVoltar }) {
       return
     }
 
-    const falha = await lancarEstoqueInicial(data.medicamento.id, valores.estoqueInicial)
+    // Horários (Sessão #10) e estoque inicial (Sessão #8): encadeados pelas
+    // RPCs que já existem. Se algum falhar, o cadastro fica de pé e a tela diz
+    // o que ficou faltando — nada é desfeito.
+    const falhaHorarios = await criarHorariosIniciais(data.medicamento.id, valores.horarios)
+    const falhaEstoque = await lancarEstoqueInicial(data.medicamento.id, valores.estoqueInicial)
     setOcupado(false)
     setResidente(null)
+    const falha = falhaHorarios || falhaEstoque
+    const complementos = [
+      valores.horarios?.length > 0 && `${valores.horarios.length} horário(s)`,
+      valores.estoqueInicial && 'estoque inicial'
+    ].filter(Boolean)
     setAviso(
       falha
         ? { tipo: 'erro', texto: falha }
         : {
             tipo: 'ok',
             texto: `${data.medicamento.nome} cadastrado${
-              valores.estoqueInicial ? ' com o estoque inicial lançado' : ''
+              complementos.length > 0 ? ` com ${complementos.join(' e ')}` : ''
             }.`
           }
     )

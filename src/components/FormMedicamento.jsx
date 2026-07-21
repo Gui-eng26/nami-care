@@ -21,8 +21,16 @@ function rotuloCatalogo(item) {
 // um item novo do catálogo. posologia/tipo/estoque_minimo continuam por
 // residente e sempre editáveis.
 //
-// No CADASTRO (não na edição) há ainda o estoque inicial opcional da Sessão #8:
-// evita a segunda viagem à aba Estoque para lançar o que já veio com o remédio.
+// No CADASTRO (não na edição) há ainda o estoque inicial opcional da Sessão #8
+// e, desde a Sessão #10, os HORÁRIOS do medicamento contínuo — sem eles o
+// cadastro nascia incompleto: um contínuo sem horário não gera dose na ronda.
+// SOS continua sem horários (dose avulsa, DEC-014), então o bloco só aparece
+// para o tipo contínuo.
+//
+// Na EDIÇÃO os horários não aparecem aqui de propósito: alterar horário de um
+// medicamento com histórico é ato versionado (DEC-026, via `atualizar_horario`)
+// e tem tela própria na ficha do medicamento, que mostra a versão desativada e
+// a nova. Duplicar isso no modal esconderia o versionamento.
 //
 // Componente compartilhado pelas duas portas de cadastro: a gestão de
 // residentes e o atalho "+ Medicamento" da aba Estoque.
@@ -56,6 +64,11 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
   const [origemInicial, setOrigemInicial] = useState('compra')
   const [dataInicial, setDataInicial] = useState(hojeLocal())
 
+  // Horários (Sessão #10) — só no cadastro de contínuo. Começa com uma linha
+  // em branco: a grade é o que faz o medicamento existir na ronda.
+  const [horarios, setHorarios] = useState([{ hora: '', qtdDose: '1' }])
+  const [erroHorarios, setErroHorarios] = useState(null)
+
   useEffect(() => {
     if (modo !== 'buscar') return
     const t = termo.trim()
@@ -78,9 +91,14 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
     }
   }, [termo, modo])
 
+  // Horários informados, sem linha em branco. Só valem no cadastro de contínuo.
+  const horariosInformados =
+    !medicamento && tipo === 'continuo' ? horarios.filter((h) => h.hora !== '') : []
+
   function submeter(e) {
     e.preventDefault()
     setErroCatalogo(null)
+    setErroHorarios(null)
     let catalogoId = null
     let nome = ''
     let dosagem = ''
@@ -99,6 +117,27 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
       setErroCatalogo('Selecione um medicamento do catálogo ou crie um novo item.')
       return
     }
+
+    // Contínuo sem horário não entra em ronda nenhuma — era exatamente o
+    // cadastro incompleto que esta tela passou a resolver (Sessão #10).
+    if (!medicamento && tipo === 'continuo') {
+      if (horariosInformados.length === 0) {
+        setErroHorarios(
+          'Informe ao menos um horário: sem horário, o medicamento contínuo não gera doses na ronda.'
+        )
+        return
+      }
+      const horas = horariosInformados.map((h) => h.hora)
+      if (new Set(horas).size !== horas.length) {
+        setErroHorarios('Há horários repetidos — cada horário do medicamento deve ser único.')
+        return
+      }
+      if (horariosInformados.some((h) => !(Number(h.qtdDose) > 0))) {
+        setErroHorarios('A dose de cada horário deve ser maior que zero, em passos de 0,5.')
+        return
+      }
+    }
+
     onSalvar({
       catalogoId,
       nome,
@@ -108,6 +147,8 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
       tipo,
       // Estoque mínimo só faz sentido para SOS (DEC-027).
       estoqueMinimo: tipo === 'sos' && estoqueMinimo !== '' ? Number(estoqueMinimo) : null,
+      // Criados logo após o medicamento, pela RPC criar_horario (Sessão #10).
+      horarios: horariosInformados.map((h) => ({ hora: h.hora, qtdDose: Number(h.qtdDose) })),
       estoqueInicial:
         !medicamento && qtdInicial !== '' && Number(qtdInicial) > 0
           ? {
@@ -269,6 +310,74 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
                 onChange={(e) => setEstoqueMinimo(e.target.value)}
               />
             </label>
+          )}
+
+          {/* Horários da ronda (Sessão #10) — só no cadastro de contínuo.
+              Mesma dupla hora + dose da tela de gestão, mesma RPC. */}
+          {!medicamento && tipo === 'continuo' && (
+            <div className="catalogo-bloco">
+              <span className="catalogo-rotulo">Horários das rondas</span>
+              <p className="bloco-explicacao">
+                É o que gera as doses na ronda. Um horário por linha, com a dose
+                daquele horário.
+              </p>
+              {horarios.map((h, i) => (
+                <div className="formulario-linha horario-linha" key={i}>
+                  <label>
+                    Horário
+                    <input
+                      type="time"
+                      value={h.hora}
+                      onChange={(e) => {
+                        const valor = e.target.value
+                        setErroHorarios(null)
+                        setHorarios((lista) =>
+                          lista.map((item, j) => (j === i ? { ...item, hora: valor } : item))
+                        )
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Dose (passos de 0,5)
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      inputMode="decimal"
+                      value={h.qtdDose}
+                      onChange={(e) => {
+                        const valor = e.target.value
+                        setErroHorarios(null)
+                        setHorarios((lista) =>
+                          lista.map((item, j) => (j === i ? { ...item, qtdDose: valor } : item))
+                        )
+                      }}
+                    />
+                  </label>
+                  {horarios.length > 1 && (
+                    <button
+                      type="button"
+                      className="botao-mini botao-mini-perigo horario-remover"
+                      aria-label={`Remover o ${i + 1}º horário`}
+                      onClick={() => {
+                        setErroHorarios(null)
+                        setHorarios((lista) => lista.filter((_, j) => j !== i))
+                      }}
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                className="botao-secundario botao-catalogo-novo"
+                onClick={() => setHorarios((lista) => [...lista, { hora: '', qtdDose: '1' }])}
+              >
+                + Adicionar horário
+              </button>
+              {erroHorarios && <p className="aviso aviso-erro">{erroHorarios}</p>}
+            </div>
           )}
 
           {!medicamento && (

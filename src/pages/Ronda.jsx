@@ -29,16 +29,19 @@ function agruparPorSlot(lista) {
 }
 
 // Tela operacional central (DEC-003): a agenda do turno vem inteira da RPC
-// doses_do_turno — slots, tolerância de 30 min e situação são calculados no
-// banco, nunca aqui. A baixa de estoque é o trigger de administracoes (DEC-008).
-export default function Ronda({ turno, onTurnoFechado }) {
+// doses_do_turno — slots, tolerância de 60 min (DEC-039, que revisou os 30 min
+// da DEC-010) e situação são calculados no banco, nunca aqui. A baixa de
+// estoque é o trigger de administracoes (DEC-008).
+//
+// "Encerrar turno" saiu daqui na Sessão #10: virou botão do cabeçalho, para a
+// cuidadora encerrar de qualquer aba. `recarga` é o sinal do App para reler a
+// agenda quando o banco recusa o fechamento.
+export default function Ronda({ turno, recarga }) {
   const [doses, setDoses] = useState(null)
   const [proximaRonda, setProximaRonda] = useState(null)
   const [doseAberta, setDoseAberta] = useState(null)
   const [sosAberto, setSosAberto] = useState(false)
   const [avisoSos, setAvisoSos] = useState(null)
-  const [avisoFechamento, setAvisoFechamento] = useState(null)
-  const [fechando, setFechando] = useState(false)
 
   const carregar = useCallback(async () => {
     const { data, error } = await supabase.rpc('doses_do_turno', { p_turno_id: turno.id })
@@ -73,7 +76,7 @@ export default function Ronda({ turno, onTurnoFechado }) {
       carregarProximaRonda()
     }, 60000)
     return () => clearInterval(relogio)
-  }, [carregar, carregarProximaRonda])
+  }, [carregar, carregarProximaRonda, recarga])
 
   const grupos = useMemo(() => {
     if (!doses) return null
@@ -83,38 +86,6 @@ export default function Ronda({ turno, onTurnoFechado }) {
       tratadas: doses.filter((d) => d.situacao === 'tratada')
     }
   }, [doses])
-
-  async function encerrarTurno() {
-    setFechando(true)
-    setAvisoFechamento(null)
-    const { data, error } = await supabase.rpc('fechar_turno', { p_turno_id: turno.id })
-    setFechando(false)
-    if (error) {
-      setAvisoFechamento('Falha ao encerrar o turno. Tente novamente.')
-      return
-    }
-    if (data.ok) {
-      onTurnoFechado()
-      return
-    }
-    if (data.erro === 'doses_pendentes') {
-      // O bloqueio pode vir de duas filas (Sessão #5.5): doses deste turno
-      // (ronda) e pendências de períodos sem turno aberto (tela própria).
-      const partes = []
-      if (data.total_ronda > 0) {
-        partes.push(`${data.total_ronda} dose(s) deste turno sem tratativa (aqui na ronda)`)
-      }
-      if (data.total_entre_turnos > 0) {
-        partes.push(
-          `${data.total_entre_turnos} pendência(s) de períodos sem turno aberto (aba "Pendências entre turnos")`
-        )
-      }
-      setAvisoFechamento(`Ainda há ${partes.join(' e ')}. Resolva tudo antes de encerrar o turno.`)
-      carregar()
-    } else {
-      setAvisoFechamento('Não foi possível encerrar o turno.')
-    }
-  }
 
   if (grupos === null) {
     return (
@@ -201,23 +172,16 @@ export default function Ronda({ turno, onTurnoFechado }) {
         </div>
       </section>
 
-      <section className="secao secao-encerrar">
-        {avisoFechamento && <p className="aviso aviso-erro">{avisoFechamento}</p>}
-        <button
-          type="button"
-          className="botao-perigo"
-          onClick={encerrarTurno}
-          disabled={fechando}
-        >
-          {fechando ? 'Encerrando…' : 'Encerrar turno'}
-        </button>
-        {totalSemTratativa > 0 && (
+      {/* O botão de encerrar vive no cabeçalho (Sessão #10); o que fica aqui é
+          o aviso do que ainda trava o fechamento. */}
+      {totalSemTratativa > 0 && (
+        <section className="secao secao-encerrar">
           <p className="nota-encerrar">
             {totalSemTratativa} dose(s) do turno ainda sem tratativa — o encerramento
             só é liberado quando todas forem tratadas.
           </p>
-        )}
-      </section>
+        </section>
+      )}
 
       {sosAberto && (
         <DoseSos

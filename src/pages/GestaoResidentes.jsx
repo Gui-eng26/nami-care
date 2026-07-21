@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
+import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
 
 const ROTULO_TIPO = { continuo: 'Contínuo', sos: 'SOS' }
@@ -338,12 +339,18 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
             })
             if (r) {
               setForm(null)
-              // Estoque inicial (Sessão #8): movimentação encadeada pelas RPCs
-              // do ledger; se falhar, o cadastro fica de pé e a tela avisa.
-              const falha = await lancarEstoqueInicial(
+              // Horários (Sessão #10) e estoque inicial (Sessão #8):
+              // encadeados pelas RPCs que já existem; se algum falhar, o
+              // cadastro fica de pé e a tela avisa o que ficou faltando.
+              const falhaHorarios = await criarHorariosIniciais(
+                r.medicamento.id,
+                valores.horarios
+              )
+              const falhaEstoque = await lancarEstoqueInicial(
                 r.medicamento.id,
                 valores.estoqueInicial
               )
+              const falha = falhaHorarios || falhaEstoque
               setAviso(falha ? { tipo: 'erro', texto: falha } : null)
               carregarMedicamentos()
             }

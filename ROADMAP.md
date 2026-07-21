@@ -29,7 +29,7 @@ do todo; em caso de conflito com DECISIONS.md, o DECISIONS prevalece.
   fechamento exige tratativa em todas as doses (DEC-022).
 - Tela da ronda: agenda via RPC `doses_do_turno`, tolerância de 30 min e
   situação calculadas no banco; telas LoginCasa, AssumirTurno e Ronda
-  (DEC-023).
+  (DEC-023). *(Tolerância revisada para 60 min na Sessão #10 — DEC-039.)*
 
 **Pendências pós-sessão:** ~~commit + push~~ ✅ · habilitar Leaked Password
 Protection no dashboard do Auth · testar no celular da casa (depende do
@@ -260,6 +260,51 @@ categoria nova; seed resetado. **Nada do go-live foi tocado.**
 
 **Postergado:** "medicamento da casa" (SOS sem residente vinculado) —
 `medicamentos.idoso_id` é NOT NULL; exige decisão e sessão próprias.
+
+---
+
+## Sessão 9 — Dados de demonstração ✅ (2026-07-21)
+
+Sessão curta e descartável, de DADOS — nenhuma tela, RPC, migration ou arquivo
+de `src/`. Entregou `npm run seed-demo`: cenário de casa em operação sobre o
+banco de teste (histórico de adesão, turno aberto, lacuna de turno acendendo a
+faixa de pendências, doses na janela do horário da execução) para a conversa com
+a Thais. Ver `RELATORIO_SESSAO_09.md`.
+
+---
+
+## Sessão 10 — Ajustes rápidos do pós-demo ✅ (2026-07-21)
+
+Três ajustes independentes levantados na demonstração à Thais, de baixo/médio
+risco, entregues juntos. Tema comum: tirar atrito do uso real sem mexer em
+estrutura — nenhuma RPC nova, nenhuma mudança de schema.
+
+- **"Encerrar turno" no cabeçalho:** antes vivia dentro da aba Ronda, e de
+  Estoque ou Adesão a cuidadora precisava voltar só para encerrar. A lógica de
+  fechamento é a MESMA `fechar_turno`; o que mudou é navegação — a recusa leva
+  até a fila que bloqueou (Ronda, ou "Pendências entre turnos" quando o bloqueio
+  vem só de lá).
+- **DEC-039 — janela de "atrasada" de 30 → 60 min** (revisa a DEC-010): 30 min
+  era curto para o ritmo da casa e o vermelho precoce virava ruído. Migration
+  20260721000200 redefinindo `doses_do_turno`. As duas ocorrências de
+  `30 minutes` no schema eram a mesma função redefinida — o `create or replace`
+  resolve as duas por construção. **`fechar_turno` continua exigindo tratativa de
+  toda dose devida:** a janela governa a cor, nunca a exigência de resposta.
+- **Horários no cadastro de medicamento contínuo:** o `FormMedicamento` da
+  Sessão #8 gravava posologia e tipo mas nunca criava horários — um contínuo
+  cadastrado por ele não gerava dose nenhuma. Agora há bloco de hora + dose
+  encadeando `criar_horario`, valendo para as duas portas (atalho "+ Medicamento"
+  e Residentes). SOS segue sem horários; contínuo passou a exigir ao menos um.
+  A edição de horário continua só na ficha do medicamento, para não esconder o
+  versionamento da DEC-026.
+
+1 migration nova (20260721000200) com smoke/rollback e bateria de fronteira
+(20/45/59/61/75/200 min); critério de pronto (1)–(5) no navegador a 375px; build
+OK; advisors sem nada novo; seed resetado. **Nada do go-live foi tocado.**
+
+**Fora de escopo, aguardando sessão própria:** rastreamento por lote e validade
+(muda o núcleo do ledger — a baixa passa a escolher lote, provável FEFO) e
+"medicamento da casa" (SOS sem residente, `idoso_id` NOT NULL).
 
 ---
 

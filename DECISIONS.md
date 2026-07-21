@@ -142,9 +142,14 @@ a UI e mantém o ledger fiel à realidade física. Sem cenário de devolução.
 ---
 
 ## DEC-010 — Janela de 30 min + fechamento de turno obrigatório
-**Data:** 2026-07-15 | **Status:** aprovada
+**Data:** 2026-07-15 | **Status:** aprovada, com a **tolerância revisada pela
+DEC-039** (Sessão #10, 2026-07-21): a janela antes de a dose virar "atrasada"
+passou de **30 para 60 min**. Todo o resto desta decisão — inclusive o
+fechamento de turno obrigatório, que independe da tolerância — segue valendo
+sem alteração.
 
-**Decisão:** Dose pode ser confirmada até 30 min após o horário agendado. Depois
+**Decisão:** Dose pode ser confirmada até 30 min (hoje 60 — DEC-039) após o
+horário agendado. Depois
 vira "atrasada" e permanece em destaque na tela. O turno só pode ser encerrado
 quando todas as doses do período receberem tratativa: tomou no horário (registro
 tardio), tomou atrasado, ou não tomou.
@@ -887,3 +892,51 @@ originou a decisão); criar um terceiro nível de permissão por cuidadora
 (complexidade de administração que a casa não tem quem opere, para um piloto de
 quatro pessoas); permitir a edição sem exigir turno aberto (perderia a
 atribuição da autoria, que é justamente o que se queria ganhar).
+
+---
+
+## DEC-039 — Janela de "atrasada": 30 → 60 minutos (revisa a DEC-010)
+**Data:** 2026-07-21 | **Status:** aprovada (Sessão #10; revisa a tolerância
+fixada pela DEC-010)
+
+**Contexto:** a demonstração do piloto à Thais (Sessão #9) validou o produto e
+levantou ajustes de uso real. Um deles: com 30 min de tolerância, a dose salta
+para "atrasada" (destaque vermelho) cedo demais para o ritmo da casa — uma ronda
+que escorrega meia hora é rotina, não exceção, e o vermelho precoce vira ruído.
+Alarme que soa o tempo todo deixa de ser sinal.
+
+**Decisão:** a tolerância entre o horário previsto e a dose devida sem tratativa
+ser marcada **"atrasada"** passa de **30 para 60 minutos**. Só esse número muda.
+
+**Consequência consciente e aceita:** a dose fica "na hora"/pendente por mais
+tempo antes de saltar como atrasada — menos alarme precoce, em troca de um
+atraso real demorar um pouco mais a chamar atenção visual. Escolha do Guilherme,
+a partir do uso observado.
+
+**O que NÃO muda (importante):**
+- `fechar_turno` continua exigindo tratativa de **toda** dose devida do turno,
+  inclusive a que ainda está dentro da tolerância (DEC-010/DEC-022). A janela
+  governa a COR/urgência na ronda, nunca a exigência de resposta: nenhuma dose
+  deixa de ser respondida por causa deste ajuste, e o ledger e o relatório de
+  adesão seguem com a mesma completude.
+- A classificação de adesão (DEC-030) não depende da tolerância: ela vem do
+  **status gravado** (`tomado_no_horario` × `tomado_atrasado`), que é escolha da
+  cuidadora no modal, não do relógio.
+- A janela de 15 min da "próxima ronda" e o rate limit de PIN de 15 min
+  (DEC-021) são outras coisas e ficam intactos.
+- A fila de pendências entre turnos (DEC-033) não usa tolerância — pendência é
+  dose vencida em período sem turno aberto, sem meio-termo.
+
+**Implementação:** a expressão vive num lugar só — `doses_do_turno`, fonte única
+da lógica de slots (DEC-023), consumida tanto pela tela da ronda quanto pelo
+`fechar_turno`. A migration `20260721000200_janela_atraso_60min` substitui a
+versão vigente da função; os dois pontos históricos do schema (migrations
+20260716000700 e 20260716001000, que redefinia a mesma função) convergem por
+construção. Conferido no banco após aplicar: nenhuma função do schema `public`
+ainda contém `30 minutes`.
+
+**Alternativa descartada:** tornar a tolerância parametrizável (por casa, por
+medicamento ou por horário). Um número configurável exigiria tela, decisão de
+quem configura e um valor-padrão que continuaria sendo esta mesma escolha —
+complexidade sem ganho num piloto de casa única. Se a parametrização virar
+necessidade real no uso, ela nasce de dado observado, não de suposição.

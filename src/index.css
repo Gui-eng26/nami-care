@@ -137,6 +137,38 @@ body {
   margin-top: 0.375rem;
 }
 
+/* Cabeçalho em duas faixas (Sessão #10): título à esquerda e "Encerrar turno"
+   no canto superior direito; os botões de gestão ficam na faixa de baixo. A
+   350px sobra folga para o título de duas linhas e o pill de encerrar. */
+.app-header-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* Ação de SAÍDA — sólida e clara, contra os pills translúcidos de gestão, que
+   abrem áreas. Distinta sem gritar: o vermelho de erro fica reservado para a
+   recusa do fechamento, que é o que de fato exige atenção. */
+.botao-encerrar-turno {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--cor-primaria-texto);
+  background: #fff;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  padding: 0.5rem 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.botao-encerrar-turno:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .app-header-acoes {
   display: flex;
   align-items: center;
@@ -197,8 +229,16 @@ body {
   gap: 0.5rem;
 }
 
+/* min-width: 0 vence a largura intrínseca do input (um campo de texto "pede"
+   ~180px por padrão): sem isso, dois campos lado a lado estouram os 375px e o
+   modal inteiro passa a rolar na horizontal. */
 .formulario-linha > label {
   flex: 1;
+  min-width: 0;
+}
+
+.formulario-linha > label > input {
+  width: 100%;
 }
 
 .formulario .campo-opcao {
@@ -496,6 +536,11 @@ body {
   flex-direction: column;
   gap: 0.5rem;
   padding-bottom: 1.5rem;
+}
+
+/* Recusa do fechamento vinda do cabeçalho (Sessão #10). */
+.aviso-fechamento {
+  margin-bottom: 0.75rem;
 }
 
 .nota-encerrar {
@@ -1014,6 +1059,29 @@ body {
   align-self: flex-start;
   font-size: 0.8125rem;
   padding: 0.5rem 0.75rem;
+}
+
+/* ---- horários no cadastro de medicamento contínuo (Sessão #10) ---- */
+
+.bloco-explicacao {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+/* Hora + dose lado a lado; a 375px o "Remover" quebra para a linha de baixo
+   em vez de espremer os campos. */
+.horario-linha {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.horario-linha > label {
+  min-width: 7.5rem;
+}
+
+.horario-remover {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .catalogo-cancelar-troca {

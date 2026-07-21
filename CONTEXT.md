@@ -1,13 +1,43 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-21 (fim da Sessão #9)
+> Última atualização: 2026-07-21 (fim da Sessão #10)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #10 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_10.md`. Três
+ajustes independentes vindos da demonstração à Thais, de baixo/médio risco:
+- [x] **"Encerrar turno" no cabeçalho** (antes vivia dentro da aba Ronda):
+      visível de qualquer aba, pill branco sólido no canto superior direito,
+      distinto dos botões de gestão. A lógica de fechamento é a MESMA
+      `fechar_turno` — o que mudou é navegação: a recusa leva a cuidadora até a
+      fila que a bloqueou (Ronda, ou "Pendências entre turnos" se o bloqueio for
+      só de lá)
+- [x] **DEC-039 — janela de "atrasada" de 30 → 60 min** (revisa a DEC-010):
+      migration 20260721000200 redefinindo `doses_do_turno`. As duas ocorrências
+      de `30 minutes` no schema eram **a mesma função redefinida**, então o
+      `create or replace` resolve as duas por construção. `fechar_turno` continua
+      exigindo tratativa de toda dose devida — a janela governa a cor, nunca a
+      exigência de resposta
+- [x] **Horários no cadastro de medicamento contínuo** (`FormMedicamento`): o
+      cadastro nascia incompleto — um contínuo sem horário não gera dose. Agora
+      há bloco de hora + dose, encadeando `criar_horario` via
+      `src/lib/horariosIniciais.js` (padrão do `estoqueInicial.js`). Vale para as
+      duas portas (atalho "+ Medicamento" e Residentes). SOS segue sem horários.
+      Contínuo passou a **exigir ao menos um horário**; a edição de horário
+      continua só na ficha, para não esconder o versionamento da DEC-026
+- [x] Correção de passagem: a linha Dosagem + Forma estourava os 375px e fazia o
+      modal inteiro rolar na horizontal (`min-width: 0`) — defeito pré-existente
+      da Sessão #8
+- [x] Smoke test com rollback + bateria de fronteira (20/45/59/61/75/200 min);
+      critério de pronto (1)–(5) no navegador a 375px; build OK; advisors sem
+      nada novo; seed resetado limpo
+- [ ] **Fora de escopo, aguardando sessão própria:** rastreamento por lote e
+      validade (muda o núcleo do ledger — provável FEFO) e "medicamento da casa"
 
 **Sessão #9 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_09.md`. Sessão
 curta de DADOS (nenhuma linha de `src/`, migration, RPC ou tela), para a
@@ -219,7 +249,8 @@ aberto era invisível — limite documentado na DEC-030). Entregas:
       cuidador do turno, nunca o usuário Supabase — DEC-019)
 - [x] Ronda de medicação (DEC-023): `administracoes.prevista_em` ancora o
       slot; agenda do turno vem da RPC `doses_do_turno` (fonte única);
-      tolerância de 30 min calculada no banco
+      tolerância de 30 min calculada no banco (**hoje 60 min — DEC-039,
+      Sessão #10**)
 - [x] Telas do PWA: LoginCasa (usuário único da casa), AssumirTurno
       (cuidador + teclado PIN), Ronda (atrasadas em destaque, tratativa em
       modal, tratadas com status, encerrar turno) — verificadas no navegador
@@ -268,6 +299,17 @@ MVP entra em piloto.
       cadastro de medicamento agora tem estoque inicial embutido (compra ou
       remanescente) e atalho dentro da aba Estoque — a viagem separada à aba
       para lançar a primeira entrada deixou de ser necessária
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_10.md, salvar no Drive, commit + push
+- [ ] Acompanhar no piloto: se **60 min** (DEC-039) é a tolerância certa. Agora
+      que o vermelho é mais raro, ele deve voltar a significar alguma coisa;
+      eventual reajuste deve vir de uso observado, não de suposição
+- [ ] Acompanhar no piloto: a exigência de **ao menos um horário** no cadastro de
+      medicamento contínuo (Sessão #10). Se existir caso legítimo de cadastrar
+      antes de saber a posologia, é fácil afrouxar
+- [ ] **Sessão própria — rastreamento por lote e validade:** cada entrada de
+      estoque com lote/validade próprios, exibidos também no estoque por
+      residente. Muda o núcleo do ledger (a baixa passa a escolher lote, provável
+      FEFO) e tem decisões de produto pendentes. Levantado na demo à Thais
 - [ ] **Guilherme:** revisar RELATORIO_SESSAO_08.md, salvar no Drive, commit + push
 - [ ] Acompanhar no piloto: mudar prescrição no meio do dia versiona (DEC-026) e
       faz o slot novo pedir tratativa naquele mesmo dia — comportamento antigo,
