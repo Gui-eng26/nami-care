@@ -160,9 +160,10 @@ principal; botão "encerrar turno" bloqueado enquanto houver pendências.
 
 ## DEC-011 — Sem perfil admin no MVP
 **Data:** 2026-07-15 | **Status:** parcialmente substituída pela DEC-024
-(Sessão #3): permanece válida para a **operação** (ronda, tratativas, estoque);
-os **cadastros** (cuidadoras, residentes, medicamentos, horários) passaram a
-exigir administradora.
+(Sessão #3) e parcialmente restaurada pela DEC-038 (Sessão #8): vale para a
+**operação** (ronda, tratativas, estoque) e, de novo, para os cadastros de
+**residentes, medicamentos e horários** — agora com a trava do turno aberto,
+não mais livre. Só a gestão de **equipe** segue exigindo administradora.
 
 **Decisão:** Todos os cuidadores podem cadastrar e editar idosos, medicamentos e
 horários.
@@ -368,7 +369,11 @@ duplo registro. Em registro tardio de dose tomada no horário, o app envia
 ---
 
 ## DEC-024 — Acesso à gestão: administradora com PIN verificado a cada RPC
-**Data:** 2026-07-16 | **Status:** aprovada (Sessão #3; substitui parcialmente a DEC-011)
+**Data:** 2026-07-16 | **Status:** substituída parcialmente pela DEC-038 —
+continua valendo INTEGRALMENTE para a gestão de **equipe**; para residentes,
+medicamentos e prescrições a autorização passou a ser o turno aberto
+(Sessão #8). Antes disso: aprovada na Sessão #3, substituindo parcialmente a
+DEC-011.
 
 **Decisão:** `cuidadores.eh_admin` marca quem é administradora. A área de
 gestão (cadastro/edição de cuidadoras, residentes, medicamentos e
@@ -832,3 +837,53 @@ pré-requisito do go-live.
 ferramenta de conferência local, sem garantias de produção); servidor estático
 em Caddy/nginx (mais uma stack para manter, sem ganho no piloto); host estático
 separado, ex. Vercel (descartado na DEC-007).
+
+---
+
+## DEC-038 — Gestão de residentes e prescrições autorizada por turno, não por PIN de admin
+**Data:** 2026-07-21 | **Status:** aprovada (Sessão #8; inverte parcialmente a DEC-024)
+
+**Decisão:** a autorização das RPCs de **residentes, medicamentos e
+prescrições** deixa de ser `p_admin_id + p_admin_pin` / `fn_autorizar_admin` e
+passa a ser **`fn_cuidador_do_turno()` — exige turno aberto**, o mesmo padrão
+que as RPCs de estoque já usavam desde a Sessão #4. São nove: `criar_residente`,
+`atualizar_residente`, `definir_ativo_residente`, `criar_medicamento`,
+`atualizar_medicamento`, `definir_ativo_medicamento`, `criar_horario`,
+`atualizar_horario`, `definir_ativo_horario`. Sem turno aberto elas retornam
+`sem_turno_aberto` e não executam. Nenhuma outra regra dessas RPCs mudou.
+
+A **gestão de equipe permanece sob a DEC-024, sem alteração alguma**:
+`criar_cuidador`, `atualizar_cuidador`, `definir_ativo_cuidador`,
+`redefinir_pin` e `autorizar_gestao` continuam exigindo PIN de administradora
+validado no banco a cada chamada.
+
+**Racional:** a trava de admin não protegia o histórico clínico — corrompia-o.
+Uma residente volta da consulta com prescrição nova; a cuidadora do turno é
+profissional de saúde habilitada e vai aplicar a mudança de qualquer forma, mas
+não conseguia registrá-la sem a administradora presente (a admin não fica na
+casa 24/7). Resultado: a mudança acontecia no mundo real e o app ficava com o
+dado velho — a trilha de auditoria que a DEC-024 queria proteger sumia, porque
+a ação real acontecia fora do sistema. O sistema não pode ser a trava que impede
+o **registro** de uma decisão que a profissional está habilitada a tomar; manter
+a trava não impedia a mudança, só a documentação dela.
+
+**O que torna isso seguro é a DEC-026, que permanece intacta:** mudar
+dose/horário de medicamento já administrado NÃO sobrescreve — versiona (desativa
+a linha antiga, cria a nova). Abrir a edição de prescrição à cuidadora do turno
+portanto não corrompe histórico nenhum; e como a ação passa a ser atribuída à
+cuidadora do turno dentro do app, a auditoria **melhora** em relação ao estado
+anterior. A separação de escopos também é conceitual: administrar *quem tem
+acesso ao sistema* (equipe) é ato administrativo e segue sob admin; alterar o
+cuidado de uma residente é ato clínico de quem está de plantão.
+
+**No cliente:** a gestão de residentes deixa de ter tela de PIN; a de equipe
+mantém a sua. O `eh_admin` da cuidadora do turno é carregado junto com o turno
+apenas para decidir se o botão "Gestão equipe" aparece — **esconder botão nunca
+é segurança**: quem barra é a RPC, que continua validando o PIN de admin no
+banco.
+
+**Alternativas descartadas:** manter tudo sob PIN de admin (o problema que
+originou a decisão); criar um terceiro nível de permissão por cuidadora
+(complexidade de administração que a casa não tem quem opere, para um piloto de
+quatro pessoas); permitir a edição sem exigir turno aberto (perderia a
+atribuição da autoria, que é justamente o que se queria ganhar).

@@ -3,17 +3,21 @@ import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
 import TecladoPin from '../components/TecladoPin.jsx'
 import GestaoCuidadoras from './GestaoCuidadoras.jsx'
-import GestaoResidentes from './GestaoResidentes.jsx'
 
-// Área de gestão (DEC-024): entrada com PIN de administradora, validado no
-// banco (RPC autorizar_gestao). A credencial fica só em memória e é reenviada
-// a cada RPC de gestão — o servidor revalida tudo; a tela é apenas a porta.
+// Gestão de EQUIPE (DEC-024, preservada pela DEC-038): entrada com PIN de
+// administradora, validado no banco (RPC autorizar_gestao). A credencial fica
+// só em memória e é reenviada a cada RPC de equipe — o servidor revalida tudo;
+// a tela é apenas a porta.
+//
+// Por que só a equipe: criar/desativar cuidadora, marcar administradora e
+// redefinir PIN de outra pessoa é administrar QUEM TEM ACESSO ao sistema, não
+// um ato de cuidado. Residentes, medicamentos e prescrições saíram daqui na
+// DEC-038 e passaram a ser autorizados pelo turno aberto.
 export default function Gestao({ onSair }) {
   const [admins, setAdmins] = useState(null)
   const [selecionada, setSelecionada] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [credencial, setCredencial] = useState(null)
-  const [aba, setAba] = useState('residentes')
 
   useEffect(() => {
     supabase
@@ -53,8 +57,8 @@ export default function Gestao({ onSair }) {
     if (!selecionada) {
       return (
         <div className="card">
-          <h2>Gestão — quem é a administradora?</h2>
-          <p>Cadastros de equipe, residentes e prescrições exigem PIN de administradora.</p>
+          <h2>Gestão de equipe — quem é a administradora?</h2>
+          <p>Cadastro de cuidadoras e redefinição de PIN exigem PIN de administradora.</p>
           <div className="lista-cuidadores">
             {admins.map((a) => (
               <button
@@ -97,30 +101,10 @@ export default function Gestao({ onSair }) {
   return (
     <>
       <p className="gestao-admin-nota">
-        Gestão como <strong>{credencial.nome}</strong> — cada alteração é
-        autorizada e registrada no banco.
+        Gestão de equipe como <strong>{credencial.nome}</strong> — cada alteração
+        é autorizada e registrada no banco.
       </p>
-      <div className="abas">
-        <button
-          type="button"
-          className={`aba ${aba === 'residentes' ? 'aba-ativa' : ''}`}
-          onClick={() => setAba('residentes')}
-        >
-          Residentes
-        </button>
-        <button
-          type="button"
-          className={`aba ${aba === 'equipe' ? 'aba-ativa' : ''}`}
-          onClick={() => setAba('equipe')}
-        >
-          Equipe
-        </button>
-      </div>
-      {aba === 'residentes' ? (
-        <GestaoResidentes credencial={credencial} />
-      ) : (
-        <GestaoCuidadoras credencial={credencial} />
-      )}
+      <GestaoCuidadoras credencial={credencial} />
     </>
   )
 }

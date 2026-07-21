@@ -174,17 +174,21 @@ ordenação pelo pior caso do grupo, sinal do ajuste, filtro de subtipo).
 
 **Pendências pós-sessão:** commit + push.
 
-## Sessão 7 — Deploy e go-live ⏳ (2026-07-21) — preparação concluída
+## Sessão 7 — Deploy e go-live ⏳ (2026-07-21) — app no ar, dados reais pendentes
+
+**Produção:** https://nami-care-production.up.railway.app
+
 
 Última sessão de código do MVP planejado. Sessão de infraestrutura, sem
 nenhuma mudança de produto: Ronda, turno, Pendências entre turnos, Adesão,
 Estoque (atual e extrato), gestão e catálogo ficaram intocados.
 
-- **Produção reprodutível pelo repositório (DEC-037):** `railway.json` (build
-  + start), `.node-version`, `npm run start` servindo `dist/` como estático em
-  modo SPA — o dev server do Vite não roda em produção. Fronteira de segredos:
-  só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no serviço público;
-  service role e `CASA_*` seguem restritos a script local.
+- **Produção no ar (DEC-037):** serviço no Railway servindo o build estático,
+  reprodutível pelo repositório — `railway.json` (build + start),
+  `.node-version`, `npm run start` servindo `dist/` como estático em modo SPA;
+  o dev server do Vite não roda em produção. Fronteira de segredos conferida no
+  bundle publicado: só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`; service
+  role e `CASA_*` seguem restritos a script local e ausentes do bundle.
 - **PWA instalável:** ícones PNG 192/512 (any e maskable) + apple-touch-icon e
   favicon, gerados do logo real da casa por `npm run icones` — símbolo isolado
   (casinha, casal e coração) sobre o creme da identidade, porque a 192px o
@@ -195,22 +199,61 @@ Estoque (atual e extrato), gestão e catálogo ficaram intocados.
   acontecer em produção) e `npm run criar-admin` (bootstrap da primeira
   administradora, DEC-024: PIN digitado pela própria pessoa sem eco na tela,
   hash gerado no banco por `fn_hash_pin`).
-- **Achado (DEC-037):** o app usa só `signInWithPassword` — Site URL e Redirect
-  URLs **não bloqueiam** o login pela URL do Railway. Cadastrar a URL segue
-  recomendado como higiene, mas não é pré-requisito do go-live.
+- **Supabase Auth de produção:** Site URL + 2 Redirect URLs (produção e
+  `localhost:5173`) configuradas. **Achado (DEC-037):** o app usa só
+  `signInWithPassword` — essas URLs **não bloqueiam** o login pela URL do
+  Railway; foram feitas como higiene, não como pré-requisito do go-live.
 
-**Verificado:** build de produção servido pelo mesmo comando do Railway, a
-375px — manifest, os 4 ícones e o service worker em 200, SW registrado, console
-limpo, tema preservado; guardas dos dois scripts novos testadas contra o banco
+**Verificado na URL pública, a 375px:** tela de login no tema Sereníssima,
+console limpo, manifest e os 4 ícones em 200, service worker registrado sobre
+HTTPS com escopo `/` (instalabilidade atendida), bundle com as variáveis certas
+e sem segredo vazado. Guardas dos dois scripts novos testadas contra o banco
 real sem escrever nada. Advisors sem novidade não intencional.
 
-**Aberto — execução operacional, não código** (runbook em
-`RELATORIO_SESSAO_07.md` §6): criar o serviço no Railway e obter a URL;
-limpar o banco e cadastrar os dados reais pela tela de gestão; instalar no
-celular da casa.
+**Aberto — execução operacional, não código** (passos 4–8 do runbook em
+`RELATORIO_SESSAO_07.md` §6): instalar no celular da casa; limpar o banco de
+teste e cadastrar os dados reais.
 
 **Critério de pronto do MVP:** casa operando no app, sem planilha e sem
 contagem manual — **ainda não atingido**: depende do runbook acima.
+
+---
+
+## Sessão 8 — Acesso da operação e usabilidade do cadastro ✅ (2026-07-21)
+
+Primeira sessão **pós-MVP**, fora do plano original: nasceu do teste real do
+PWA no celular, antes de levar o app à Thais. Tema comum das quatro entregas —
+tirar travas que atrapalham a operação diária da cuidadora e encurtar o caminho
+do cadastro de medicamento, sem perder auditoria nem integridade clínica.
+
+- **DEC-038 — gestão de residentes autorizada por turno (inverte parcialmente a
+  DEC-024):** as 9 RPCs de residentes, medicamentos e prescrições trocaram
+  `fn_autorizar_admin` por `fn_cuidador_do_turno` (novo erro
+  `sem_turno_aberto`). A trava de admin não protegia o histórico clínico —
+  corrompia: a cuidadora aplicava a nova prescrição no mundo real e o app ficava
+  com o dado velho, porque só a admin podia registrar. O que torna a abertura
+  segura é a **DEC-026 (versionamento), intacta**; a auditoria melhora, porque a
+  autoria passa a ser capturada. **Gestão de equipe segue integralmente sob a
+  DEC-024** — administrar quem tem acesso ao sistema não é ato de cuidado.
+- **Estoque inicial no cadastro de medicamento:** opcional, com escolha da
+  origem — compra (`entrada_compra`) ou remanescente na prateleira
+  (`ajuste_contagem`). Encadeia as RPCs de ledger da Sessão #4; sem caminho de
+  escrita novo e sem mudança de schema.
+- **Atalho "+ Medicamento" na aba Estoque:** seletor de residente + o mesmo
+  cadastro pelo catálogo (DEC-035) + o estoque inicial. Encurta bastante o
+  passo 7 do runbook de go-live.
+- **Home reorganizada:** nome da cuidadora abaixo do título (não clicável, era
+  um botão falso); "Gestão residentes" (todas) e "Gestão equipe" (só admin,
+  ainda com PIN) no header; pendências entre turnos deixaram de ser aba e viraram
+  faixa de alerta que só existe quando há pendência; abas = Ronda, Adesão,
+  Estoque.
+
+1 migration nova (20260721000100) com smoke/rollback e bateria SQL; critério de
+pronto (1)–(9) no navegador a 375px, nos dois perfis; build OK; advisors sem
+categoria nova; seed resetado. **Nada do go-live foi tocado.**
+
+**Postergado:** "medicamento da casa" (SOS sem residente vinculado) —
+`medicamentos.idoso_id` é NOT NULL; exige decisão e sessão próprias.
 
 ---
 

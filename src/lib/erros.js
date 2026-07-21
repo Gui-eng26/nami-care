@@ -26,7 +26,9 @@ const MENSAGENS = {
   horario_duplicado: 'Já existe um horário ativo nesse instante para este medicamento.',
   horario_nao_encontrado: 'Horário não encontrado.',
   horario_inativo: 'Horário desativado — reative-o ou cadastre um novo.',
-  sem_turno_aberto: 'Abra um turno antes de registrar movimentações de estoque.',
+  // Vale para estoque (Sessão #4) e, desde a DEC-038, para os cadastros de
+  // residentes, medicamentos e prescrições.
+  sem_turno_aberto: 'Abra um turno antes de registrar esta alteração.',
   medicamento_inativo: 'Medicamento desativado — reative-o antes de registrar compra.',
   data_futura: 'A data da compra não pode estar no futuro.',
   motivo_obrigatorio: 'Informe o motivo da perda.',

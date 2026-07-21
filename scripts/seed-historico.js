@@ -101,7 +101,6 @@ export async function gerarHistorico(supabase, falhar) {
   if (e1) falhar('histórico: ler cuidadores', e1)
   const pinPorNome = Object.fromEntries(cuidadoresSeed.map((c) => [c.nome, c.pin]))
   const porNome = Object.fromEntries(cuidadores.map((c) => [c.nome, c]))
-  const admin = porNome['Ana Souza']
 
   const { data: medicamentos, error: e2 } = await supabase
     .from('medicamentos')
@@ -225,31 +224,31 @@ export async function gerarHistorico(supabase, falhar) {
   const horarioAntigo = grade1.find(
     (s) => s.medicamento_id === sinvastatina.id && s.hora === '20:00'
   )
-  const versao = await rpc(
-    'atualizar_horario',
-    {
-      p_admin_id: admin.id,
-      p_admin_pin: pinPorNome[admin.nome],
-      p_horario_id: horarioAntigo.horario_id,
-      p_hora: '19:00',
-      p_qtd_dose: 1
-    },
-    'histórico: versionar horário da Sinvastatina'
-  )
-  if (!versao.versionado) {
-    falhar('histórico: versionamento', new Error('esperava horário versionado'))
-  }
-  await rpc(
-    'criar_horario',
-    {
-      p_admin_id: admin.id,
-      p_admin_pin: pinPorNome[admin.nome],
-      p_medicamento_id: sinvastatina.id,
-      p_hora: '08:00',
-      p_qtd_dose: 1
-    },
-    'histórico: novo horário da Sinvastatina'
-  )
+  // DEC-038: mudança de prescrição é autorizada por TURNO ABERTO (não mais por
+  // PIN de admin) — daí acontecer dentro de um turno, como na casa real.
+  await comTurno(porNome['Ana Souza'], async () => {
+    const versao = await rpc(
+      'atualizar_horario',
+      {
+        p_horario_id: horarioAntigo.horario_id,
+        p_hora: '19:00',
+        p_qtd_dose: 1
+      },
+      'histórico: versionar horário da Sinvastatina'
+    )
+    if (!versao.versionado) {
+      falhar('histórico: versionamento', new Error('esperava horário versionado'))
+    }
+    await rpc(
+      'criar_horario',
+      {
+        p_medicamento_id: sinvastatina.id,
+        p_hora: '08:00',
+        p_qtd_dose: 1
+      },
+      'histórico: novo horário da Sinvastatina'
+    )
+  })
 
   // --- fase 2: D-2..D-1 com a grade nova + hoje parcial --------------------
   const grade2 = await gradeAtiva()

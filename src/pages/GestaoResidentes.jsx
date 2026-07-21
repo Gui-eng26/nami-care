@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
+import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
+import FormMedicamento from '../components/FormMedicamento.jsx'
 
 const ROTULO_TIPO = { continuo: 'Contínuo', sos: 'SOS' }
 
@@ -10,11 +12,15 @@ function dataLocal(iso) {
   return `${dia}/${mes}/${ano}`
 }
 
-// Gestão de residentes e prescrições (DEC-024/DEC-026): navegação em três
+// Gestão de residentes e prescrições (DEC-038/DEC-026): navegação em três
 // níveis — lista de residentes → ficha do residente (medicamentos) → horários
 // do medicamento. Toda escrita passa pelas RPCs; alterações de prescrição com
 // histórico geram versão nova no banco (atualizar_horario), nunca reescrita.
-export default function GestaoResidentes({ credencial }) {
+//
+// Sem PIN de administradora (DEC-038): a autorização é o TURNO ABERTO, exigido
+// dentro de cada RPC (fn_cuidador_do_turno) — quem registra a mudança clínica é
+// a cuidadora do turno, e é o turno dela que fica na trilha de auditoria.
+export default function GestaoResidentes() {
   const [residentes, setResidentes] = useState(null)
   const [residente, setResidente] = useState(null)
 
@@ -42,7 +48,6 @@ export default function GestaoResidentes({ credencial }) {
   if (residente) {
     return (
       <FichaResidente
-        credencial={credencial}
         residente={residente}
         onVoltar={() => {
           setResidente(null)
@@ -63,7 +68,6 @@ export default function GestaoResidentes({ credencial }) {
 
   return (
     <ListaResidentes
-      credencial={credencial}
       residentes={residentes}
       onAbrir={setResidente}
       onRecarregar={carregar}
@@ -71,7 +75,7 @@ export default function GestaoResidentes({ credencial }) {
   )
 }
 
-function ListaResidentes({ credencial, residentes, onAbrir, onRecarregar }) {
+function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
   const [form, setForm] = useState(false)
   const [aviso, setAviso] = useState(null)
   const [ocupado, setOcupado] = useState(false)
@@ -80,8 +84,6 @@ function ListaResidentes({ credencial, residentes, onAbrir, onRecarregar }) {
     setOcupado(true)
     setAviso(null)
     const { data, error } = await supabase.rpc('criar_residente', {
-      p_admin_id: credencial.id,
-      p_admin_pin: credencial.pin,
       p_nome: valores.nome,
       p_nascimento: valores.nascimento || null,
       p_observacoes: valores.observacoes || null
@@ -148,7 +150,7 @@ function ListaResidentes({ credencial, residentes, onAbrir, onRecarregar }) {
   )
 }
 
-function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
+function FichaResidente({ residente, onVoltar, onAtualizado }) {
   const [medicamentos, setMedicamentos] = useState(null)
   const [medicamento, setMedicamento] = useState(null)
   const [form, setForm] = useState(null) // 'residente' | 'medicamento'
@@ -172,11 +174,7 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
   async function chamarRpc(nome, params) {
     setOcupado(true)
     setAviso(null)
-    const { data, error } = await supabase.rpc(nome, {
-      p_admin_id: credencial.id,
-      p_admin_pin: credencial.pin,
-      ...params
-    })
+    const { data, error } = await supabase.rpc(nome, params)
     setOcupado(false)
     if (error) {
       setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
@@ -192,7 +190,6 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
   if (medicamento) {
     return (
       <FichaMedicamento
-        credencial={credencial}
         residente={residente}
         medicamento={medicamento}
         onVoltar={() => {
@@ -341,6 +338,13 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
             })
             if (r) {
               setForm(null)
+              // Estoque inicial (Sessão #8): movimentação encadeada pelas RPCs
+              // do ledger; se falhar, o cadastro fica de pé e a tela avisa.
+              const falha = await lancarEstoqueInicial(
+                r.medicamento.id,
+                valores.estoqueInicial
+              )
+              setAviso(falha ? { tipo: 'erro', texto: falha } : null)
               carregarMedicamentos()
             }
           }}
@@ -350,7 +354,7 @@ function FichaResidente({ credencial, residente, onVoltar, onAtualizado }) {
   )
 }
 
-function FichaMedicamento({ credencial, residente, medicamento, onVoltar, onAtualizado }) {
+function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
   const [horarios, setHorarios] = useState(null)
   const [form, setForm] = useState(null) // {modo:'medicamento'} | {modo:'horario', horario?}
   const [aviso, setAviso] = useState(null)
@@ -373,11 +377,7 @@ function FichaMedicamento({ credencial, residente, medicamento, onVoltar, onAtua
   async function chamarRpc(nome, params) {
     setOcupado(true)
     setAviso(null)
-    const { data, error } = await supabase.rpc(nome, {
-      p_admin_id: credencial.id,
-      p_admin_pin: credencial.pin,
-      ...params
-    })
+    const { data, error } = await supabase.rpc(nome, params)
     setOcupado(false)
     if (error) {
       setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
@@ -613,263 +613,6 @@ function FormResidente({ residente, ocupado, onFechar, onSalvar }) {
               onChange={(e) => setObservacoes(e.target.value)}
             />
           </label>
-          <div className="modal-acoes">
-            <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
-              Cancelar
-            </button>
-            <button type="submit" className="botao-primario" disabled={ocupado}>
-              {ocupado ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// Formata "Nome dosagem — forma" para exibir um item do catálogo.
-function rotuloCatalogo(item) {
-  const dose = item.dosagem ? ` ${item.dosagem}` : ''
-  const forma = item.forma_farmaceutica ? ` — ${item.forma_farmaceutica}` : ''
-  return `${item.nome}${dose}${forma}`
-}
-
-// Cadastro/edição de medicamento (DEC-035): nome/dosagem/forma vêm do CATÁLOGO
-// da casa (entidade compartilhada), nunca de texto livre na tela do residente —
-// editar por texto mudaria o remédio de todos os residentes vinculados ao item.
-// O medicamento é a) selecionar um item existente (busca por nome) ou b) criar
-// um item novo do catálogo. posologia/tipo/estoque_minimo continuam por
-// residente e sempre editáveis.
-function FormMedicamento({ medicamento, ocupado, onFechar, onSalvar }) {
-  // catalogo escolhido: { id, nome, dosagem, forma_farmaceutica } | null.
-  const [catalogo, setCatalogo] = useState(
-    medicamento
-      ? {
-          id: medicamento.catalogo_id,
-          nome: medicamento.nome,
-          dosagem: medicamento.dosagem,
-          forma_farmaceutica: medicamento.forma_farmaceutica
-        }
-      : null
-  )
-  // 'escolhido' (item definido) | 'buscar' (procurando) | 'novo' (criando item).
-  const [modo, setModo] = useState(medicamento ? 'escolhido' : 'buscar')
-  const [termo, setTermo] = useState('')
-  const [resultados, setResultados] = useState([])
-  const [novo, setNovo] = useState({ nome: '', dosagem: '', forma: '' })
-  const [erroCatalogo, setErroCatalogo] = useState(null)
-
-  const [posologia, setPosologia] = useState(medicamento?.posologia ?? '')
-  const [tipo, setTipo] = useState(medicamento?.tipo ?? 'continuo')
-  const [estoqueMinimo, setEstoqueMinimo] = useState(
-    medicamento?.estoque_minimo != null ? String(Number(medicamento.estoque_minimo)) : ''
-  )
-
-  useEffect(() => {
-    if (modo !== 'buscar') return
-    const t = termo.trim()
-    if (t.length < 2) {
-      setResultados([])
-      return
-    }
-    let cancelado = false
-    supabase
-      .from('catalogo_medicamentos')
-      .select('id, nome, dosagem, forma_farmaceutica')
-      .ilike('nome', `%${t}%`)
-      .order('nome')
-      .limit(15)
-      .then(({ data }) => {
-        if (!cancelado) setResultados(data ?? [])
-      })
-    return () => {
-      cancelado = true
-    }
-  }, [termo, modo])
-
-  function submeter(e) {
-    e.preventDefault()
-    setErroCatalogo(null)
-    let catalogoId = null
-    let nome = ''
-    let dosagem = ''
-    let forma = ''
-    if (modo === 'escolhido' && catalogo?.id) {
-      catalogoId = catalogo.id
-    } else if (modo === 'novo') {
-      nome = novo.nome.trim()
-      dosagem = novo.dosagem.trim()
-      forma = novo.forma.trim()
-      if (nome === '') {
-        setErroCatalogo('Informe o nome do medicamento.')
-        return
-      }
-    } else {
-      setErroCatalogo('Selecione um medicamento do catálogo ou crie um novo item.')
-      return
-    }
-    onSalvar({
-      catalogoId,
-      nome,
-      dosagem,
-      forma,
-      posologia: posologia.trim(),
-      tipo,
-      // Estoque mínimo só faz sentido para SOS (DEC-027).
-      estoqueMinimo: tipo === 'sos' && estoqueMinimo !== '' ? Number(estoqueMinimo) : null
-    })
-  }
-
-  return (
-    <div className="modal-fundo" onClick={onFechar}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>{medicamento ? `Editar ${medicamento.nome}` : 'Novo medicamento'}</h3>
-        <form className="formulario" onSubmit={submeter}>
-          <div className="catalogo-bloco">
-            <span className="catalogo-rotulo">Medicamento (catálogo da casa)</span>
-
-            {modo === 'escolhido' && (
-              <div className="catalogo-escolhido">
-                <span className="catalogo-escolhido-nome">
-                  {catalogo ? rotuloCatalogo(catalogo) : '—'}
-                </span>
-                <button
-                  type="button"
-                  className="botao-mini"
-                  onClick={() => {
-                    setModo('buscar')
-                    setTermo('')
-                    setResultados([])
-                  }}
-                >
-                  Trocar
-                </button>
-              </div>
-            )}
-
-            {modo === 'buscar' && (
-              <>
-                <input
-                  autoFocus
-                  value={termo}
-                  placeholder="Buscar por nome (ex.: Losartana)"
-                  onChange={(e) => setTermo(e.target.value)}
-                />
-                {termo.trim().length >= 2 && (
-                  <ul className="catalogo-resultados">
-                    {resultados.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          className="catalogo-opcao"
-                          onClick={() => {
-                            setCatalogo(item)
-                            setModo('escolhido')
-                            setErroCatalogo(null)
-                          }}
-                        >
-                          {rotuloCatalogo(item)}
-                        </button>
-                      </li>
-                    ))}
-                    {resultados.length === 0 && (
-                      <li className="catalogo-vazio">Nada encontrado no catálogo.</li>
-                    )}
-                  </ul>
-                )}
-                <button
-                  type="button"
-                  className="botao-secundario botao-catalogo-novo"
-                  onClick={() => {
-                    setNovo({ nome: termo.trim(), dosagem: '', forma: '' })
-                    setModo('novo')
-                    setErroCatalogo(null)
-                  }}
-                >
-                  + Criar novo item do catálogo
-                </button>
-                {medicamento && (
-                  <button
-                    type="button"
-                    className="botao-mini catalogo-cancelar-troca"
-                    onClick={() => setModo('escolhido')}
-                  >
-                    Cancelar troca
-                  </button>
-                )}
-              </>
-            )}
-
-            {modo === 'novo' && (
-              <>
-                <label>
-                  Nome
-                  <input
-                    autoFocus
-                    value={novo.nome}
-                    onChange={(e) => setNovo((n) => ({ ...n, nome: e.target.value }))}
-                    required
-                  />
-                </label>
-                <div className="formulario-linha">
-                  <label>
-                    Dosagem
-                    <input
-                      value={novo.dosagem}
-                      placeholder="ex.: 50 mg"
-                      onChange={(e) => setNovo((n) => ({ ...n, dosagem: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Forma
-                    <input
-                      value={novo.forma}
-                      placeholder="ex.: comprimido"
-                      onChange={(e) => setNovo((n) => ({ ...n, forma: e.target.value }))}
-                    />
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  className="botao-mini"
-                  onClick={() => {
-                    setModo('buscar')
-                    setErroCatalogo(null)
-                  }}
-                >
-                  ‹ Voltar à busca
-                </button>
-              </>
-            )}
-
-            {erroCatalogo && <p className="aviso aviso-erro">{erroCatalogo}</p>}
-          </div>
-
-          <label>
-            Posologia (orientação)
-            <textarea rows={2} value={posologia} onChange={(e) => setPosologia(e.target.value)} />
-          </label>
-          <label>
-            Tipo
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
-              <option value="continuo">Contínuo (com horários de ronda)</option>
-              <option value="sos">SOS (dose avulsa, sem horários)</option>
-            </select>
-          </label>
-          {tipo === 'sos' && (
-            <label>
-              Estoque mínimo de segurança (opcional)
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                inputMode="decimal"
-                placeholder="alerta de recompra abaixo desta quantidade"
-                value={estoqueMinimo}
-                onChange={(e) => setEstoqueMinimo(e.target.value)}
-              />
-            </label>
-          )}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar

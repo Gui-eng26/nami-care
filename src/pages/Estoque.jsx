@@ -3,15 +3,35 @@ import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
 import { fmtQtd, ROTULO_MOVIMENTACAO, dataHoraLocal } from '../lib/formato.js'
 import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
+import NovoMedicamento from './NovoMedicamento.jsx'
 
 // Aba Estoque com duas visões (DEC-036). O seletor comunica diferença de
 // FUNÇÃO: "Estoque atual" tem as ações de compra/ajuste/perda (Sessão #4, sem
 // mudança); "Extrato de movimentações" é somente leitura. Abre sempre em
 // "Estoque atual" — idêntica à de antes.
+//
+// O atalho "+ Medicamento" (Sessão #8) mora aqui, e não na home: é nesta aba
+// que a cuidadora já vem ver saldo e lançar compra — e é aqui que o estoque
+// inicial do cadastro aparece. Ao voltar, a lista remonta e relê o saldo.
 export default function Estoque() {
   const [visao, setVisao] = useState('atual')
+  const [cadastrando, setCadastrando] = useState(false)
+
+  if (cadastrando) {
+    return <NovoMedicamento onVoltar={() => setCadastrando(false)} />
+  }
+
   return (
     <>
+      <div className="estoque-acoes">
+        <button
+          type="button"
+          className="botao-secundario"
+          onClick={() => setCadastrando(true)}
+        >
+          + Medicamento
+        </button>
+      </div>
       <div className="segmented">
         <button
           type="button"

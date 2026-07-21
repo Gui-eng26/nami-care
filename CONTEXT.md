@@ -1,29 +1,55 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-21 (fim da Sessão #7)
+> Última atualização: 2026-07-21 (fim da Sessão #8)
 
 ## Onde estamos
 
-**Fase atual:** Fase 4 — Go-live. Produto e infraestrutura PRONTOS; o piloto
-ainda não começou (falta a execução operacional do runbook).
+**Fase atual:** Fase 4 — Go-live. **App no ar em
+https://nami-care-production.up.railway.app**; o piloto ainda não começou
+(falta o banco de produção receber os dados reais).
+
+**Sessão #8 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_08.md`. Primeira
+sessão pós-MVP, a partir do teste real do PWA no celular. Quatro entregas:
+- [x] **DEC-038 — gestão de residentes autorizada por TURNO, não por PIN de
+      admin (inverte parcialmente a DEC-024):** as 9 RPCs de residentes,
+      medicamentos e prescrições passaram de `fn_autorizar_admin` para
+      `fn_cuidador_do_turno` (erro novo `sem_turno_aberto`); toda a validação de
+      negócio preservada. Motivo: a trava não protegia o histórico clínico —
+      corrompia, porque a cuidadora aplicava a nova prescrição no mundo real e
+      não conseguia registrá-la. A **DEC-026 (versionamento) é o que torna isso
+      seguro**, e a auditoria melhora (a autoria passa a ficar no app). A gestão
+      de **equipe** continua integralmente sob a DEC-024
+- [x] **Estoque inicial no cadastro de medicamento:** passo opcional com escolha
+      da origem — compra (`entrada_compra`) ou remanescente (`ajuste_contagem`);
+      encadeia as RPCs de ledger existentes, sem caminho de escrita novo
+- [x] **Atalho "+ Medicamento" na aba Estoque:** seletor de residente + mesmo
+      cadastro pelo catálogo (DEC-035) + estoque inicial
+- [x] **Home reorganizada:** nome da cuidadora abaixo do título (não clicável);
+      "Gestão residentes" (todas) e "Gestão equipe" (só admin, ainda com PIN) no
+      header; pendências entre turnos viraram faixa de alerta que só existe com
+      pendência; abas = Ronda, Adesão, Estoque
+- [x] 1 migration nova (20260721000100) com smoke/rollback + bateria SQL;
+      critério de pronto (1)–(9) no navegador (375px); build OK; advisors sem
+      categoria nova; seed resetado limpo
 
 **Sessão #7 (2026-07-21) — PARCIALMENTE CONCLUÍDA.** Ver
 `RELATORIO_SESSAO_07.md`. Sessão de infraestrutura, sem nenhuma mudança de
-produto. Tudo o que o repositório entrega sozinho está pronto e verificado; o
-que depende de conta externa (Railway, painel do Supabase) ou de dado que só a
-casa tem (nomes, prescrições, contagem, PIN da Thais) está preparado e
-documentado como runbook (§6 do relatório), não executado.
-- [x] **Produção reprodutível pelo repositório (DEC-037):** `railway.json`
-      (build + start), `.node-version`, `npm run start` servindo `dist/` como
-      estático em modo SPA — o dev server do Vite não roda em produção.
-      Fronteira de segredos: só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
-      no serviço público
+produto. Deploy e PWA prontos e verificados na URL pública; o que depende de
+dado que só a casa tem (nomes, prescrições, contagem, PIN da Thais) está
+preparado e documentado como runbook (§6 do relatório), não executado.
+- [x] **Produção no ar (DEC-037):** serviço no Railway servindo o build
+      estático, reprodutível pelo repositório — `railway.json` (build + start),
+      `.node-version`, `npm run start` servindo `dist/` em modo SPA; o dev
+      server do Vite não roda em produção. Fronteira de segredos verificada no
+      bundle publicado: só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`;
+      service role e `CASA_SENHA` ausentes
 - [x] **PWA instalável:** ícones PNG 192/512 (any e maskable) + apple-touch-icon
       e favicon, gerados do logo real da casa por `npm run icones` (símbolo
       isolado sobre creme, blend multiply); manifest atualizado; SVGs teal da
-      Sessão #1 removidos; conferido no build servido (manifest, ícones e SW
-      200; SW registrado; console limpo)
+      Sessão #1 removidos. Conferido NA URL PÚBLICA: manifest, os 4 ícones e o
+      SW em 200, SW registrado sobre HTTPS com escopo `/`, console limpo, tela
+      de login no tema Sereníssima a 375px
 - [x] **Ferramental do go-live:** `npm run limpar-banco` (apaga o seed sem
       repopular, exige digitar APAGAR) e `npm run criar-admin` (primeira
       administradora; PIN digitado por ela sem eco na tela, hash no banco;
@@ -33,8 +59,11 @@ documentado como runbook (§6 do relatório), não executado.
       qualquer origem). Cadastrar a URL segue recomendado como higiene, mas não
       é pré-requisito do go-live
 - [x] Advisors revisados: sem novidade não intencional; build final OK
-- [ ] **Aberto:** criar o serviço no Railway e obter a URL; limpar o banco e
-      cadastrar os dados reais; instalar no celular da casa
+- [x] **Supabase Auth de produção configurado:** Site URL
+      `https://nami-care-production.up.railway.app` + 2 Redirect URLs (produção
+      e `localhost:5173`). Higiene — não bloqueava o login (ver DEC-037)
+- [ ] **Aberto:** instalar no celular da casa; limpar o banco de teste e
+      cadastrar os dados reais
 
 **Sessão #6 (2026-07-20) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_06.md`. Duas
 entregas na ordem (a 2ª depende da 1ª):
@@ -190,19 +219,32 @@ necessidade de negócio — acompanhamento de movimentação de estoque — que
 entra no MVP como **Sessão #6**. Ver `SESSAO_06.md`. O deploy/go-live
 (escopo que estava previsto aqui) vira **Sessão #7**.
 
-**Próximo passo:** não é uma sessão de código — é a **execução do runbook de
-go-live** (§6 do `RELATORIO_SESSAO_07.md`), pelo Guilherme com a Thais: publicar
-no Railway, limpar o banco de teste, bootstrap da Thais, cadastrar os dados
-reais pela tela de gestão (medicamentos SEMPRE pelo catálogo da Sessão #6 — o
-1º cadastro cria o item, os demais residentes reaproveitam por busca), lançar a
-última contagem manual como movimentação e instalar no celular da casa. Só
-depois disso o MVP entra em piloto.
+**Próximo passo (inalterado pela Sessão #8):** não é uma sessão de código — são
+os **passos 4 a 8 do runbook
+de go-live** (§6 do `RELATORIO_SESSAO_07.md`), pelo Guilherme com a Thais:
+instalar no celular da casa, limpar o banco de teste, bootstrap da Thais,
+cadastrar os dados reais pela tela de gestão (medicamentos SEMPRE pelo catálogo
+da Sessão #6 — o 1º cadastro cria o item, os demais residentes reaproveitam por
+busca) e lançar a última contagem manual como movimentação. Só depois disso o
+MVP entra em piloto.
 
 ## Pendências operacionais
 
-- [ ] **Guilherme + Thais:** executar o runbook de go-live
-      (`RELATORIO_SESSAO_07.md` §6) — Railway, limpeza do banco, dados reais,
-      instalação no celular
+- [ ] **Guilherme + Thais:** executar os passos 4–8 do runbook de go-live
+      (`RELATORIO_SESSAO_07.md` §6) — instalação no celular, limpeza do banco,
+      bootstrap da Thais, dados reais. Passos 1–3 (publicar, Railway, URLs do
+      Auth) concluídos em 2026-07-21. **A Sessão #8 encurtou o passo 7:** o
+      cadastro de medicamento agora tem estoque inicial embutido (compra ou
+      remanescente) e atalho dentro da aba Estoque — a viagem separada à aba
+      para lançar a primeira entrada deixou de ser necessária
+- [ ] **Guilherme:** revisar RELATORIO_SESSAO_08.md, salvar no Drive, commit + push
+- [ ] Acompanhar no piloto: mudar prescrição no meio do dia versiona (DEC-026) e
+      faz o slot novo pedir tratativa naquele mesmo dia — comportamento antigo,
+      mas que ficará muito mais visível agora que a edição é da cuidadora do
+      turno (ver `RELATORIO_SESSAO_08.md` §5)
+- [ ] "Medicamento da casa" (SOS sem residente vinculado) — postergado na
+      Sessão #8: `medicamentos.idoso_id` é NOT NULL; exige decisão e sessão
+      próprias
 - [ ] **Guilherme:** logo definitivo refinado do PWA (os ícones atuais vêm de um
       print, upscalado de 147px — legível e on-brand, mas um vetor original
       daria traço mais limpo). Trocar o arquivo e rodar `npm run icones`

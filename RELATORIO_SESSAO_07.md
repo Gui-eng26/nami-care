@@ -1,24 +1,26 @@
 # RELATÓRIO — Sessão Claude Code #7
 
-> Deploy e go-live: preparação de produção, PWA instalável e ferramental de
+> Deploy e go-live: produção no ar, PWA instalável e ferramental de
 > bootstrap dos dados reais.
 > Data: 2026-07-21 | Modelo: Claude Opus 4.8 | Roteiro: `SESSAO_07.md`
+
+**URL de produção: https://nami-care-production.up.railway.app**
 
 ---
 
 ## 1. Resumo executivo
 
-Sessão de infraestrutura, sem nenhuma mudança de produto. Tudo o que o
-repositório consegue entregar sozinho está **pronto e verificado**; o que
-depende de conta externa (painel do Railway, painel do Supabase) ou de dado que
-só a casa tem (nomes, prescrições, contagem de estoque, PIN da Thais) está
-**preparado e documentado como runbook**, não executado.
+Sessão de infraestrutura, sem nenhuma mudança de produto. **O app está no ar** e
+o PWA está instalável; o que falta é o que depende de dado que só a casa tem
+(nomes, prescrições, contagem de estoque, PIN da Thais), **preparado e
+documentado como runbook**.
 
 **Concluído nesta sessão:**
 
-- **Produção reprodutível a partir do repositório (DEC-037):** `railway.json`
-  (build + start), `.node-version`, `npm run start` servindo `dist/` como
-  estático em modo SPA. O dev server do Vite não roda em produção.
+- **Produção no ar (DEC-037):** serviço no Railway servindo o build estático,
+  reprodutível a partir do repositório — `railway.json` (build + start),
+  `.node-version`, `npm run start` servindo `dist/` em modo SPA. O dev server do
+  Vite não roda em produção. Verificado na URL pública (§3).
 - **PWA instalável:** ícones PNG 192/512 (any e maskable) + apple-touch-icon e
   favicon, gerados do logo real da casa por script reprodutível
   (`npm run icones`). Manifest atualizado e conferido no build servido.
@@ -29,13 +31,11 @@ só a casa tem (nomes, prescrições, contagem de estoque, PIN da Thais) está
   e Redirect URLs **não bloqueiam** o login pela URL do Railway (detalhe em §5).
 - Advisors revisados: sem novidade não intencional.
 
-**Aberto (depende do Guilherme/Thais — runbook em §6):** criar o serviço no
-Railway e obter a URL pública; limpar o banco e cadastrar os dados reais;
-instalar o app no celular da casa.
+**Aberto (depende do Guilherme/Thais — runbook em §6):** limpar o banco de teste
+e cadastrar os dados reais; instalar o app no celular da casa.
 
-**Estado do MVP:** produto e infraestrutura prontos; **piloto ainda não
-iniciado**. A Sessão 7 fica marcada como parcialmente concluída até o go-live
-operacional acontecer.
+**Estado do MVP:** produto e infraestrutura prontos e publicados; **piloto ainda
+não iniciado** — falta o banco de produção receber os dados reais.
 
 ## 2. O que foi construído
 
@@ -81,7 +81,19 @@ entram no precache do service worker.
 
 ## 3. Verificações executadas
 
-### Build e PWA (build de produção servido por `npm run start`, viewport 375px)
+### Na URL de produção (https://nami-care-production.up.railway.app, 375px)
+
+| Verificação | Resultado |
+|---|---|
+| Tela de login | Renderiza no tema Sereníssima; console sem erros |
+| HTTPS + service worker | Registrado, escopo `/` — requisito de instalabilidade atendido |
+| `manifest.webmanifest` | 200 `application/manifest+json`, com os 4 ícones PNG |
+| Os 6 PNGs (`/icons/*.png`) | 200 `image/png`, bytes idênticos aos gerados localmente |
+| Bundle servido | URL e anon key corretas do projeto embutidas no build |
+| Vazamento de segredo no bundle | Nenhum — `SUPABASE_SERVICE_ROLE_KEY` e `CASA_SENHA` ausentes |
+| Supabase a partir da origem de produção | 401 do REST sem chave (não erro de CORS) — RLS intacta |
+
+### Build local e PWA (build de produção servido por `npm run start`, viewport 375px)
 
 | Verificação | Resultado |
 |---|---|
@@ -142,14 +154,19 @@ mas **não é pré-requisito do go-live**. Registrado na DEC-037.
 
 Executar nesta ordem. Cada passo depende do anterior.
 
-### Passo 1 — Publicar o repositório
+> **Passos 1 a 3 concluídos** (2026-07-21): repositório publicado, serviço no ar
+> em https://nami-care-production.up.railway.app e URLs do Auth configuradas.
+> Ficam registrados para referência e para o caso de precisar recriar o
+> ambiente. O go-live continua no passo 4.
+
+### Passo 1 — Publicar o repositório ✅
 
 ```bash
 git add -A && git commit -m "feat: preparacao de deploy, PWA instalavel e bootstrap do go-live"
 git push
 ```
 
-### Passo 2 — Criar o serviço no Railway
+### Passo 2 — Criar o serviço no Railway ✅
 
 1. Railway → New Project → **Deploy from GitHub repo** → `Gui-eng26/nami-care`.
 2. O `railway.json` do repositório já define build e start — não é preciso
@@ -169,13 +186,26 @@ git push
 > que as variáveis `VITE_*` não estavam presentes **no momento do build** — o
 > Vite embute essas variáveis no bundle. Basta redeployar depois de definí-las.
 
-### Passo 3 — Supabase Auth (higiene, não bloqueia)
+### Passo 3 — Supabase Auth (higiene, não bloqueia) ✅
 
-Dashboard → Authentication → URL Configuration: colocar a URL do Railway em
-**Site URL** e adicionar `https://<algo>.up.railway.app/**` às **Redirect
-URLs**, mantendo `http://localhost:5173/**` para o desenvolvimento continuar.
+Dashboard → Authentication → URL Configuration, como ficou configurado:
+
+- **Site URL:** `https://nami-care-production.up.railway.app` — **com o
+  `https://`**; o campo espera a URL completa, não só o host.
+- **Redirect URLs (2):** `https://nami-care-production.up.railway.app/**` e
+  `http://localhost:5173/**`, mantendo o desenvolvimento funcionando.
+
+Nenhum dos dois bloqueia o login deste app (§5) — valem para o dia em que algum
+fluxo por e-mail (recuperação de senha, magic link) for usado.
+
+> O botão "Save changes" aparecer apagado é o estado normal de "nada pendente":
+> o Supabase só o habilita quando o campo difere do valor gravado. As Redirect
+> URLs, por sua vez, gravam no ato do "Add URL" — a lista renderizada já é o
+> estado do servidor.
 
 ### Passo 4 — Instalar no celular da casa
+
+Abrir **https://nami-care-production.up.railway.app** no celular.
 
 No **Chrome do Android** (não em outro navegador), abrir a URL do Railway e:
 menu ⋮ → **Instalar aplicativo** (ou "Adicionar à tela inicial"). O ícone da
@@ -239,7 +269,7 @@ Tudo daqui em diante é **pela tela de gestão**, logada como a Thais. Sem SQL.
 
 | # | Pendência | Dono |
 |---|---|---|
-| 1 | Executar o runbook §6 (Railway, limpeza, dados reais, instalação) | Guilherme + Thais |
+| 1 | Executar os passos 4–8 do runbook §6 (instalação no celular, limpeza do banco, bootstrap da Thais, dados reais). Passos 1–3 já feitos. | Guilherme + Thais |
 | 2 | Logo definitivo refinado do PWA — os ícones atuais vêm de um print do Instagram, upscalado de 147px. Legível e on-brand, mas um vetor original daria traço mais limpo. Trocar o arquivo e rodar `npm run icones` (recalcular a bounding box em `scripts/gerar-icones.js` se o enquadramento mudar). | Guilherme |
 | 3 | Usar o logo horizontal completo no cabeçalho / tela de login — não foi feito porque esta sessão não podia mexer em tela (restrição do roteiro). | sessão futura |
 | 4 | Bloqueio por inatividade (repedir PIN — DEC-002): reavaliar depois do piloto começar. | pós-piloto |

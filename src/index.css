@@ -120,11 +120,21 @@ body {
 
 /* ---- cabeçalho / turno ---- */
 
+/* Empilhado (Sessão #8): título, nome da cuidadora e, embaixo, os botões de
+   gestão lado a lado — a 375px duas pílulas não caberiam ao lado do título. */
 .app-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 0.75rem;
+}
+
+/* Quem está no turno: informação, não botão (antes ficava colado no botão de
+   gestão no header e parecia clicável). */
+.app-header-cuidadora {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  opacity: 0.92;
+  margin-top: 0.375rem;
 }
 
 .app-header-acoes {
@@ -133,25 +143,20 @@ body {
   gap: 0.5rem;
 }
 
-.turno-badge {
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
+.app-header-acoes:empty {
+  display: none;
 }
 
 .botao-header {
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 700;
+  flex: 1;
   color: #fff;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 999px;
-  padding: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -872,24 +877,26 @@ body {
 
 /* ---- pendências entre turnos (Sessão #5.5) ---- */
 
-/* Quatro abas em 375px: o rótulo longo quebra em duas linhas sem estourar. */
-.aba-pendencias {
-  font-size: 0.75rem;
-  line-height: 1.25;
-  padding: 0.5rem 0.375rem;
-}
-
-/* A aba INTEIRA em alerta enquanto houver pendência (decisão da Sessão #5.5);
-   declarado depois de .aba-ativa para vencer a cascata nos dois estados. */
-.aba-alerta {
+/* Deixou de ser aba na Sessão #8: virou faixa de alerta acima das abas, que só
+   existe enquanto há pendência (some sozinha quando zera) — a operação diária
+   não convive com uma aba vermelha permanente. */
+.faixa-alerta {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  text-align: left;
   background: var(--cor-erro);
-  border-color: var(--cor-erro);
+  border: 1px solid var(--cor-erro);
+  border-radius: 10px;
   color: #fff;
-}
-
-.aba-alerta.aba-ativa {
-  background: #991b1b;
-  border-color: #7f1d1d;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
 }
 
 .pendencias-explicacao {
@@ -1011,6 +1018,22 @@ body {
 
 .catalogo-cancelar-troca {
   align-self: flex-start;
+}
+
+/* ---- atalho "+ Medicamento" na aba Estoque (Sessão #8) ---- */
+
+.estoque-acoes {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+/* Para quem é o medicamento, no cabeçalho do modal de cadastro. */
+.modal-subtitulo {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cor-primaria-texto);
+  margin-top: 0.25rem;
 }
 
 /* ---- extrato de movimentações (Sessão #6 — DEC-036) ---- */
