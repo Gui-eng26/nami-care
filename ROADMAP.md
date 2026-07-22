@@ -338,6 +338,47 @@ novo. **Nada do go-live foi tocado.**
 tratamento / abertura de caixa; alerta de vencimento próximo; "medicamento da
 casa"; escolha manual de lote na perda.
 
+## Sessão 12 — Medicamento da casa (SOS compartilhado) e SOS reestruturado ✅ (2026-07-22)
+
+Último item estrutural do backlog da Thais: os SOS da **casa** (dipirona,
+antitérmico, antiemético — a caixa comum da bancada) passam a existir, sem que o
+consumo fique anônimo. O princípio: **o estoque pode ser da casa; o consumo tem
+sempre um dono.** Decisões **DEC-044..047**; 5 migrations novas.
+
+- **Sentinela (DEC-044):** um residente reservado "Da Casa"
+  (`idosos.eh_sentinela`, único parcial) carrega o estoque compartilhado.
+  `medicamentos.idoso_id` **seguiu NOT NULL** — schema de medicamentos intocado,
+  os ~16 `join idosos` intactos, **sem flag `eh_da_casa`**. Medicamento da casa é
+  sempre SOS; o sentinela não é desativável; nasce de bootstrap idempotente.
+  Aparece em vermelho na gestão e no "+ Medicamento", em seção própria no
+  estoque; some da adesão e do seletor de quem toma.
+- **Dono da dose (DEC-045):** `administracoes.idoso_id` — a única mudança de
+  schema. Preenchido só no SOS da casa. Regra única:
+  `coalesce(administracoes.idoso_id, medicamentos.idoso_id)`. Trigger fecha os
+  dois lados; imutabilidade estendida.
+- **Adesão (DEC-046):** o relatório resolve o residente pelo coalesce — a dose da
+  caixa comum entra na adesão de quem tomou, e o "Da Casa" não gera linha.
+- **SOS reestruturado (DEC-047):** quem toma → qual medicamento (os dela + os da
+  casa, coexistindo) → quantidade, registrado com o horário real. A dose SOS
+  virou RPC; INSERT direto do cliente ficou restrito à dose agendada. **A ronda
+  não mudou.** Lote/validade/FEFO da Sessão #11 valem sem exceção.
+
+Bateria SQL em rollback (10 casos + agendada inalterada + invariante
+`sum(lotes)==ledger` nos 27 medicamentos, 0 divergências); conferência a 375px
+ponta a ponta (cadastro de SOS da casa com lote/validade, "Da Casa" vermelho,
+seção separada no estoque, SOS da casa refletido na adesão da residente, SOS
+próprio inalterado e **ronda agendada registrando normalmente**); build OK; seed
+resetado criando o "Da Casa" com 3 SOS; advisors sem nada novo em espécie.
+**Nada do go-live foi tocado.**
+
+**Levantado na conferência, para a Thais decidir:** a observação de alergia do
+residente não vira alerta no passo de escolha do medicamento SOS.
+
+**Fora de escopo, aguardando sessão própria:** categoria "agudo"; abertura de
+caixa / início de tratamento; alerta de vencimento; escolha manual de lote na
+perda; medicamento da casa contínuo (decidido não existir); múltiplas
+casas/setores.
+
 ---
 
 ## Fora de escopo do MVP (backlog pós-piloto)

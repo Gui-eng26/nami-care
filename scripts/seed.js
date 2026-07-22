@@ -16,7 +16,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY    — service role key (ignora RLS; nunca no frontend)
 
 import { createClient } from '@supabase/supabase-js'
-import { cuidadores, idosos, medicamentos } from './seed-data.js'
+import { cuidadores, idosos, medicamentos, NOME_DA_CASA } from './seed-data.js'
 import { gerarHistorico } from './seed-historico.js'
 import { gerarDemo } from './seed-demo.js'
 
@@ -108,6 +108,25 @@ async function main() {
     .select('id, nome')
   if (erroIdosos) falhar('inserir idosos', erroIdosos)
   const idosoPorNome = Object.fromEntries(idososInseridos.map((i) => [i.nome, i.id]))
+
+  // Residente-sentinela "Da Casa" (DEC-044): recriado pelo bootstrap do banco,
+  // que é idempotente — o --reset apaga a linha junto com os demais idosos, e
+  // esta chamada a repõe. O seed nunca inventa o id nem o nome: os dois vêm de
+  // fn_bootstrap_residente_da_casa.
+  const { data: idCasa, error: erroCasa } = await supabase.rpc(
+    'fn_bootstrap_residente_da_casa'
+  )
+  if (erroCasa) falhar('criar residente da casa', erroCasa)
+  const { data: casa, error: erroLeituraCasa } = await supabase
+    .from('idosos')
+    .select('id, nome')
+    .eq('id', idCasa)
+    .single()
+  if (erroLeituraCasa) falhar('ler residente da casa', erroLeituraCasa)
+  idosoPorNome[NOME_DA_CASA] = casa.id
+  // Se o rótulo do sentinela for renomeado na gestão, o seed continua achando
+  // a linha pelo bootstrap — a chave acima é só o apelido interno do seed.
+  idosoPorNome[casa.nome] = casa.id
 
   // Catálogo de medicamentos (DEC-035): um item por combinação exata de
   // (nome, dosagem, forma) — o mesmo remédio de dois residentes aponta para o
@@ -209,8 +228,11 @@ async function main() {
 
   console.log('Seed concluído:')
   console.log(`  ${cuidadoresInseridos.length} cuidadores (PINs de teste: ${cuidadores.map((c) => c.pin).join(', ')})`)
-  console.log(`  ${idososInseridos.length} idosos`)
-  console.log(`  ${medicamentos.length} medicamentos (${medicamentos.filter((m) => m.tipo === 'sos').length} SOS)`)
+  console.log(`  ${idososInseridos.length} idosos + o residente "${casa.nome}" (estoque da casa)`)
+  console.log(
+    `  ${medicamentos.length} medicamentos (${medicamentos.filter((m) => m.tipo === 'sos').length} SOS,` +
+      ` dos quais ${medicamentos.filter((m) => m.idoso === NOME_DA_CASA).length} da casa)`
+  )
   console.log(`  ${totalHorarios} horários, ${medicamentos.length} entradas de estoque`)
 
   if (comHistorico) {

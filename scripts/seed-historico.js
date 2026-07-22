@@ -24,7 +24,7 @@
 // Nota de fuso: America/Sao_Paulo é UTC-3 fixo (sem horário de verão desde
 // 2019); o offset -03:00 abaixo é exato e evita dependência de biblioteca.
 
-import { cuidadores as cuidadoresSeed } from './seed-data.js'
+import { cuidadores as cuidadoresSeed, NOME_DA_CASA } from './seed-data.js'
 
 const OFFSET_CASA = '-03:00'
 
@@ -109,6 +109,10 @@ export async function gerarHistorico(supabase, falhar) {
   const medPorChave = Object.fromEntries(
     medicamentos.map((m) => [`${m.idosos.nome}|${m.nome}`, m])
   )
+  // Nome → id do residente, para gravar quem tomou o SOS da casa (DEC-045).
+  const idosoIdPorNome = Object.fromEntries(
+    medicamentos.map((m) => [m.idosos.nome, m.idoso_id])
+  )
 
   async function gradeAtiva() {
     const { data, error } = await supabase
@@ -127,12 +131,17 @@ export async function gerarHistorico(supabase, falhar) {
     }))
   }
 
-  // Doses SOS planejadas do cenário: [dias atrás, residente, medicamento, hora]
+  // Doses SOS planejadas do cenário:
+  //   [dias atrás, dono do medicamento, medicamento, hora, quem tomou?]
+  // O 5º campo só existe no SOS do estoque da casa (DEC-044/045): o consumo é
+  // do residente que tomou, e é na adesão DELE que a dose aparece (DEC-046).
   const dosesSos = [
     [5, 'Cecília Prado', 'Paracetamol', '14:30'],
     [3, 'Firmino Duarte', 'Dipirona', '10:15'],
     [3, 'Cecília Prado', 'Paracetamol', '22:10'],
-    [1, 'Iracema Barros', 'Simeticona', '16:00']
+    [1, 'Iracema Barros', 'Simeticona', '16:00'],
+    [2, NOME_DA_CASA, 'Dipirona', '15:40', 'Alzira Nogueira'],
+    [1, NOME_DA_CASA, 'Metoclopramida', '09:20', 'Hélio Sampaio']
   ]
 
   const contagem = {
@@ -170,16 +179,21 @@ export async function gerarHistorico(supabase, falhar) {
       if (error) falhar(`histórico: doses de ${dia}`, error)
     }
 
-    for (const [d, idoso, med, hora] of dosesSos) {
+    for (const [d, idoso, med, hora, quemTomou] of dosesSos) {
       if (d !== desloc) continue
       const m = medPorChave[`${idoso}|${med}`]
       const { error } = await supabase.from('administracoes').insert({
         medicamento_id: m.id,
+        // Só o SOS da casa carrega o dono da dose; nos demais fica nulo e o
+        // dono vem do medicamento (DEC-045).
+        idoso_id: quemTomou ? idosoIdPorNome[quemTomou] : null,
         cuidador_id: cuidador.id,
         qtd: 1,
         status: 'tomado_no_horario',
         registrado_em: instante(dia, hora).toISOString(),
-        observacao: 'Dose SOS (histórico de teste)'
+        observacao: quemTomou
+          ? 'Dose SOS do estoque da casa (histórico de teste)'
+          : 'Dose SOS (histórico de teste)'
       })
       if (error) falhar(`histórico: SOS de ${dia}`, error)
       contagem.sos += 1

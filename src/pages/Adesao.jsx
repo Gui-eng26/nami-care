@@ -57,9 +57,12 @@ export default function Adesao() {
   const [erro, setErro] = useState(null)
 
   useEffect(() => {
+    // O "Da Casa" (DEC-044) fica fora: ele não tem adesão própria — o consumo
+    // do SOS da casa é contado no residente que tomou (DEC-046).
     supabase
       .from('idosos')
       .select('id, nome, ativo')
+      .eq('eh_sentinela', false)
       .order('nome')
       .then(({ data, error }) => {
         if (!error) setResidentes(data)

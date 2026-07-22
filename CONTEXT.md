@@ -1,13 +1,58 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-22 (fim da Sessão #11)
+> Última atualização: 2026-07-22 (fim da Sessão #12)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #12 (2026-07-22) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_12.md`. Último
+item estrutural do backlog da Thais: **medicamento da casa** (SOS compartilhado)
+com o consumo sempre atribuído a quem tomou. Decisões **DEC-044..047**; 5
+migrations novas (`20260722000500..000900`).
+- [x] **Sentinela (DEC-044):** um residente reservado "Da Casa" carrega o estoque
+      compartilhado, marcado por `idosos.eh_sentinela` (único parcial; sem id
+      hardcodado). **`medicamentos.idoso_id` seguiu NOT NULL** — o schema de
+      medicamentos não mudou e os ~16 `join idosos` ficaram intactos. **Sem flag
+      `eh_da_casa`** (avaliada e descartada). Medicamento da casa é sempre SOS
+      (trigger); o sentinela não é desativável. Nasce de bootstrap idempotente
+      (`fn_bootstrap_residente_da_casa`), chamado pela migration e pelo seed.
+- [x] **Dono da dose (DEC-045):** `administracoes.idoso_id` (nullable) = quem
+      tomou. **Única mudança de schema.** Preenchido SÓ no SOS da casa; nulo na
+      agendada e no SOS de residente. Regra única de leitura:
+      `coalesce(administracoes.idoso_id, medicamentos.idoso_id)`. Integridade por
+      trigger nos dois lados (sem dono na casa → recusa; com dono fora da casa →
+      recusa). Imutabilidade da DEC-008 estendida à coluna.
+- [x] **Adesão (DEC-046):** `relatorio_adesao` resolve o residente pelo coalesce
+      (SOS e agendadas). O SOS da casa entra na adesão de quem tomou; o "Da Casa"
+      não gera linha. Resto do relatório intocado.
+- [x] **SOS reestruturado (DEC-047):** fluxo invertido — **quem toma → qual
+      medicamento** (os SOS dela + os da casa, coexistindo) → quantidade. A dose
+      SOS virou **RPC** (`registrar_dose_sos`, valida e normaliza o dono); a
+      política de INSERT de `administracoes` passou a exigir `horario_id`, então
+      **INSERT direto = dose agendada** e SOS só pela RPC. **A ronda não mudou.**
+- [x] Bateria SQL em rollback com 10 casos + agendada inalterada + invariante
+      `sum(lotes)==ledger` nos 27 medicamentos (0 divergências); build OK; seed
+      resetado (agora cria o "Da Casa" + 3 SOS da casa e 2 doses da casa no
+      histórico); advisors sem nada novo em espécie. **Nada do go-live tocado.**
+- [x] **Conferência a 375px feita ponta a ponta:** cadastro de SOS da casa pelo
+      "+ Medicamento" (com lote/validade), "Da Casa" vermelho e fora da contagem
+      na gestão, seção "Medicamentos da casa" no estoque, SOS da casa para a
+      Cecília (coexistindo com o SOS próprio dela) refletido na adesão dela, SOS
+      próprio inalterado, e **ronda agendada registrando normalmente** — o ponto
+      de risco da política de INSERT nova. Um ajuste saiu daí: "(DEC-044)" havia
+      vazado para a tela da cuidadora e foi removido.
+- [ ] **Levantado na conferência, para conversar com a Thais:** a observação de
+      alergia do residente (texto livre) não vira alerta no passo de escolha do
+      medicamento — a dipirona da casa aparece para quem tem alergia registrada.
+      O estoque compartilhado não criou o problema, só o tornou mais visível.
+- [ ] **Fora de escopo, aguardando sessão própria:** categoria "agudo"; abertura
+      de caixa / início de tratamento; alerta de vencimento; escolha manual de
+      lote na perda; medicamento da casa contínuo (decidido não existir);
+      múltiplas casas/setores.
 
 **Sessão #11 (2026-07-22) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_11.md`. A maior
 mudança estrutural desde o MVP: estoque rastreado por **lote físico com validade**

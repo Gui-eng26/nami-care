@@ -26,6 +26,12 @@ export const idosos = [
   { nome: 'Lourdes Quintana', nascimento: '1942-06-27', observacoes: null }
 ]
 
+// Nome do residente-sentinela que carrega o estoque compartilhado da casa
+// (DEC-044). A linha NÃO entra em `idosos` acima: ela nasce do bootstrap no
+// banco (fn_bootstrap_residente_da_casa), que é idempotente — o seed só
+// referencia o nome para pendurar os medicamentos da casa.
+export const NOME_DA_CASA = 'Da Casa'
+
 // horarios: [hora, qtd_dose]; estoqueInicial: quantidade da entrada_compra do seed.
 // Medicamentos tipo 'sos' não têm horários (DEC-014) e levam estoqueMinimo
 // (DEC-027): alerta de recompra quando o saldo fica abaixo dele.
@@ -63,5 +69,12 @@ export const medicamentos = [
   { idoso: 'Joaquim Teles', nome: 'Tansulosina', dosagem: '0,4 mg', forma: 'cápsula', posologia: '1 cápsula à noite', tipo: 'continuo', horarios: [['20:00', 1]], estoqueInicial: 30 },
 
   { idoso: 'Lourdes Quintana', nome: 'Losartana', dosagem: '50 mg', forma: 'comprimido', posologia: '1 comprimido pela manhã', tipo: 'continuo', horarios: [['08:00', 1]], estoqueInicial: 30 },
-  { idoso: 'Lourdes Quintana', nome: 'Hidroclorotiazida', dosagem: '25 mg', forma: 'comprimido', posologia: '1 comprimido pela manhã', tipo: 'continuo', horarios: [['08:00', 1]], estoqueInicial: 30 }
+  { idoso: 'Lourdes Quintana', nome: 'Hidroclorotiazida', dosagem: '25 mg', forma: 'comprimido', posologia: '1 comprimido pela manhã', tipo: 'continuo', horarios: [['08:00', 1]], estoqueInicial: 30 },
+
+  // Estoque compartilhado da casa (DEC-044): SOS que não pertencem a um
+  // residente — a caixa comum da bancada. Sempre tipo 'sos' (o banco recusa
+  // contínuo aqui). Quem toma é registrado no nome da pessoa (DEC-045).
+  { idoso: NOME_DA_CASA, nome: 'Dipirona', dosagem: '500 mg', forma: 'comprimido', posologia: 'Se dor ou febre, até 4x ao dia', tipo: 'sos', horarios: [], estoqueInicial: 30, estoqueMinimo: 10 },
+  { idoso: NOME_DA_CASA, nome: 'Paracetamol', dosagem: '500 mg', forma: 'comprimido', posologia: 'Se dor ou febre, até 3x ao dia', tipo: 'sos', horarios: [], estoqueInicial: 20, estoqueMinimo: 8 },
+  { idoso: NOME_DA_CASA, nome: 'Metoclopramida', dosagem: '10 mg', forma: 'comprimido', posologia: 'Se enjoo, até 3x ao dia', tipo: 'sos', horarios: [], estoqueInicial: 12, estoqueMinimo: 5 }
 ]

@@ -1,15 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { mensagemErro } from '../lib/erros.js'
 import { fmtQtd } from '../lib/formato.js'
 
-// Dose avulsa SOS/PRN (DEC-014): residente → medicamento SOS → quantidade →
-// confirmar. O registro é um INSERT em administracoes com horario_id nulo —
-// o mesmo caminho da ronda: o trigger da DEC-008 faz a baixa de estoque
-// (nenhuma lógica paralela) e o trigger de turno exige o cuidador do turno
-// aberto. Só medicamentos com a flag SOS aparecem aqui.
-export default function DoseSos({ turno, onFechar, onRegistrada }) {
+// Dose avulsa SOS/PRN — reestruturada na Sessão #12 (DEC-047).
+//
+// A ordem foi invertida: primeiro QUEM TOMA, depois QUAL MEDICAMENTO. Antes a
+// lista nascia do estoque SOS por residente, então só aparecia quem já tinha um
+// SOS próprio cadastrado — e não havia como dar um SOS da casa a um residente
+// qualquer.
+//
+// Passo 1: todos os residentes ATIVOS, exceto o "Da Casa" (DEC-044). É aqui, e
+//   só aqui, que o sentinela é escondido — por simplesmente não entrar na lista.
+// Passo 2: os SOS ativos DAQUELE residente + os SOS DA CASA, numa lista só. Os
+//   dois coexistem: a Maria pode ter o SOS particular dela e também tomar da
+//   caixa comum.
+// Passo 3: quantidade (meio-em-meio) e o registro.
+//
+// O registro passa pela RPC `registrar_dose_sos` e não mais por INSERT direto:
+// a regra do dono da dose (DEC-045 — medicamento da casa exige quem tomou,
+// medicamento de residente exige que fique nulo) é do banco, não da tela. A
+// baixa de estoque continua sendo o trigger da DEC-008 com FEFO (DEC-042).
+export default function DoseSos({ onFechar, onRegistrada }) {
+  const [residentes, setResidentes] = useState(null)
   const [itens, setItens] = useState(null)
-  const [residenteId, setResidenteId] = useState(null)
+  const [residente, setResidente] = useState(null)
   const [medicamento, setMedicamento] = useState(null)
   const [qtd, setQtd] = useState('1')
   const [observacao, setObservacao] = useState('')
@@ -17,60 +32,74 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
-    // A view de estoque já tem tudo: só SOS ativos de residentes ativos,
-    // com o saldo atual para a cuidadora ver antes de dar a dose.
+    // Quem toma: residentes ativos, sem o "Da Casa". Independe de ter estoque —
+    // é justamente o ponto: qualquer residente pode tomar um SOS da casa.
+    supabase
+      .from('idosos')
+      .select('id, nome')
+      .eq('ativo', true)
+      .eq('eh_sentinela', false)
+      .order('nome')
+      .then(({ data, error }) => setResidentes(error ? [] : data))
+
+    // O que há para dar: SOS ativos, com saldo — dos residentes e da casa.
     supabase
       .from('cobertura_estoque')
-      .select('medicamento_id, idoso_id, nome_idoso, nome, dosagem, forma_farmaceutica, saldo')
+      .select('medicamento_id, idoso_id, nome_idoso, nome, dosagem, forma_farmaceutica, saldo, idoso_da_casa')
       .eq('tipo', 'sos')
       .eq('ativo', true)
       .eq('idoso_ativo', true)
-      .order('nome_idoso')
       .order('nome')
       .then(({ data, error }) => setItens(error ? [] : data))
   }, [])
 
-  const residentes = useMemo(() => {
-    if (!itens) return []
-    const vistos = new Map()
-    for (const item of itens) {
-      if (!vistos.has(item.idoso_id)) vistos.set(item.idoso_id, item.nome_idoso)
-    }
-    return [...vistos.entries()].map(([id, nome]) => ({ id, nome }))
-  }, [itens])
+  // Do residente escolhido + da casa, nessa ordem: o particular dele primeiro,
+  // a caixa comum depois.
+  const opcoes = useMemo(() => {
+    if (!itens || !residente) return []
+    const proprios = itens.filter((i) => i.idoso_id === residente.id)
+    const daCasa = itens.filter((i) => i.idoso_da_casa)
+    return [...proprios, ...daCasa]
+  }, [itens, residente])
 
   async function registrar() {
     setSalvando(true)
     setErro(null)
-    const { error } = await supabase.from('administracoes').insert({
-      medicamento_id: medicamento.medicamento_id,
-      cuidador_id: turno.cuidador_id,
-      qtd: Number(qtd),
-      status: 'tomado_no_horario',
-      observacao: observacao.trim() || null
+    const { data, error } = await supabase.rpc('registrar_dose_sos', {
+      p_medicamento_id: medicamento.medicamento_id,
+      p_idoso_id: residente.id,
+      p_qtd: Number(qtd),
+      p_observacao: observacao.trim() || null
     })
     setSalvando(false)
     if (error) {
-      setErro('Não foi possível registrar a dose. Tente novamente.')
+      setErro('Falha de conexão. Tente novamente.')
+      return
+    }
+    if (!data.ok) {
+      setErro(mensagemErro(data))
       return
     }
     onRegistrada(
-      `Dose SOS registrada: ${medicamento.nome} ${medicamento.dosagem || ''} para ${medicamento.nome_idoso}.`
+      `Dose SOS registrada: ${medicamento.nome} ${medicamento.dosagem || ''} para ${residente.nome}${
+        data.da_casa ? ' (estoque da casa)' : ''
+      }.`
     )
   }
+
+  const carregando = residentes === null || itens === null
 
   return (
     <div className="modal-fundo" onClick={onFechar}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>Dose avulsa (SOS)</h3>
 
-        {itens === null && <span className="status status-carregando">Carregando…</span>}
+        {carregando && <span className="status status-carregando">Carregando…</span>}
 
-        {itens !== null && itens.length === 0 && (
+        {!carregando && residentes.length === 0 && (
           <>
             <p className="modal-medicamento">
-              Nenhum medicamento SOS cadastrado. O cadastro (com a flag SOS) é feito
-              na área de gestão.
+              Nenhum residente ativo cadastrado.
             </p>
             <div className="modal-acoes">
               <button type="button" className="botao-secundario" onClick={onFechar}>
@@ -80,7 +109,7 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
           </>
         )}
 
-        {itens !== null && itens.length > 0 && !residenteId && (
+        {!carregando && residentes.length > 0 && !residente && (
           <>
             <p className="modal-medicamento">Para quem é a dose?</p>
             <div className="opcoes-tratativa">
@@ -89,7 +118,7 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
                   key={r.id}
                   type="button"
                   className="opcao"
-                  onClick={() => setResidenteId(r.id)}
+                  onClick={() => setResidente(r)}
                 >
                   {r.nome}
                 </button>
@@ -103,13 +132,19 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
           </>
         )}
 
-        {residenteId && !medicamento && (
+        {residente && !medicamento && (
           <>
-            <p className="modal-medicamento">Qual medicamento SOS?</p>
-            <div className="opcoes-tratativa">
-              {itens
-                .filter((i) => i.idoso_id === residenteId)
-                .map((i) => (
+            <p className="modal-medicamento">
+              Qual medicamento SOS para <strong>{residente.nome}</strong>?
+            </p>
+            {opcoes.length === 0 ? (
+              <p className="card-sos">
+                Nenhum medicamento SOS disponível — nem dela, nem da casa. O
+                cadastro é feito em “+ Medicamento”, na aba Estoque.
+              </p>
+            ) : (
+              <div className="opcoes-tratativa">
+                {opcoes.map((i) => (
                   <button
                     key={i.medicamento_id}
                     type="button"
@@ -117,18 +152,20 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
                     onClick={() => setMedicamento(i)}
                   >
                     {i.nome} {i.dosagem}
+                    {i.idoso_da_casa && <span className="chip chip-casa"> Da casa</span>}
                     <span className="item-gestao-detalhe">
                       {' '}
                       — estoque: {fmtQtd(i.saldo)} {i.forma_farmaceutica || 'unidade(s)'}
                     </span>
                   </button>
                 ))}
-            </div>
+              </div>
+            )}
             <div className="modal-acoes">
               <button
                 type="button"
                 className="botao-secundario"
-                onClick={() => setResidenteId(null)}
+                onClick={() => setResidente(null)}
               >
                 ‹ Voltar
               </button>
@@ -139,8 +176,14 @@ export default function DoseSos({ turno, onFechar, onRegistrada }) {
         {medicamento && (
           <>
             <p className="modal-medicamento">
-              <strong>{medicamento.nome_idoso}</strong> — {medicamento.nome}{' '}
+              <strong>{residente.nome}</strong> — {medicamento.nome}{' '}
               {medicamento.dosagem} (estoque: {fmtQtd(medicamento.saldo)})
+              {medicamento.idoso_da_casa && (
+                <>
+                  <br />
+                  Sai do estoque da casa; a dose entra na ficha da {residente.nome}.
+                </>
+              )}
             </p>
             <div className="formulario">
               <label>

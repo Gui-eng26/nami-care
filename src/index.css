@@ -1293,3 +1293,42 @@ body {
   border-color: var(--cor-primaria-escura);
   color: #fff;
 }
+
+/* ---- medicamento da casa (Sessão #12 — DEC-044) ----
+   O "Da Casa" é reconhecível à distância: vermelho na gestão de residentes (é
+   identificação, não alerta de erro) e uma prateleira própria no estoque. */
+
+.chip-casa {
+  color: var(--cor-erro);
+  background: #fef2f2;
+}
+
+.item-gestao-casa {
+  border-color: var(--cor-erro);
+  background: #fef2f2;
+}
+
+.item-gestao-casa .item-gestao-nome {
+  color: var(--cor-erro);
+}
+
+.card-casa {
+  border-color: var(--cor-erro);
+}
+
+.estoque-casa-explicacao,
+.card-casa-explicacao {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+  margin-bottom: 0.5rem;
+}
+
+.botao-cuidador-casa {
+  border-color: var(--cor-erro);
+  background: #fef2f2;
+  color: var(--cor-erro);
+}
+
+.botao-cuidador-casa .item-gestao-detalhe {
+  display: block;
+}

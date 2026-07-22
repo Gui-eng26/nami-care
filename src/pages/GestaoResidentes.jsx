@@ -28,7 +28,7 @@ export default function GestaoResidentes() {
   const carregar = useCallback(async () => {
     const { data, error } = await supabase
       .from('idosos')
-      .select('id, nome, nascimento, observacoes, ativo')
+      .select('id, nome, nascimento, observacoes, ativo, eh_sentinela')
       .order('ativo', { ascending: false })
       .order('nome')
     setResidentes(error ? [] : data)
@@ -58,7 +58,7 @@ export default function GestaoResidentes() {
           await carregar()
           const { data } = await supabase
             .from('idosos')
-            .select('id, nome, nascimento, observacoes, ativo')
+            .select('id, nome, nascimento, observacoes, ativo, eh_sentinela')
             .eq('id', residente.id)
             .single()
           if (data) setResidente(data)
@@ -105,7 +105,10 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
   return (
     <div className="card">
       <div className="gestao-cabecalho">
-        <h2>Residentes ({residentes.filter((r) => r.ativo).length} ativos)</h2>
+        {/* O "Da Casa" não é uma pessoa: fora da contagem de residentes. */}
+        <h2>
+          Residentes ({residentes.filter((r) => r.ativo && !r.eh_sentinela).length} ativos)
+        </h2>
         <button
           type="button"
           className="botao-mini"
@@ -121,18 +124,29 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
       <ul className="lista-gestao">
         {residentes.map((r) => (
           <li key={r.id}>
+            {/* O "Da Casa" (DEC-044) aparece de propósito, destacado em
+                vermelho: é a identificação visual da caixa comum, e é por ele
+                que se cadastra um medicamento do estoque compartilhado. */}
             <button
               type="button"
-              className={`item-gestao ${r.ativo ? '' : 'item-inativo'}`}
+              className={`item-gestao ${r.ativo ? '' : 'item-inativo'} ${
+                r.eh_sentinela ? 'item-gestao-casa' : ''
+              }`}
               onClick={() => onAbrir(r)}
             >
               <span className="item-gestao-nome">
                 {r.nome}
+                {r.eh_sentinela && (
+                  <span className="item-gestao-detalhe">
+                    Estoque compartilhado — medicamentos SOS da casa
+                  </span>
+                )}
                 {r.nascimento && (
                   <span className="item-gestao-detalhe">Nascimento: {dataLocal(r.nascimento)}</span>
                 )}
               </span>
               <span className="item-gestao-chips">
+                {r.eh_sentinela && <span className="chip chip-casa">Da casa</span>}
                 {!r.ativo && <span className="chip chip-inativo">Inativo</span>}
                 <span className="dose-acao">›</span>
               </span>
@@ -231,10 +245,18 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
           Editar
         </button>
       </div>
-      <p>
-        {residente.nascimento ? `Nascimento: ${dataLocal(residente.nascimento)}` : 'Sem data de nascimento'}
-        {residente.observacoes ? ` — ${residente.observacoes}` : ''}
-      </p>
+      {residente.eh_sentinela ? (
+        <p className="card-casa-explicacao">
+          Estoque compartilhado da casa: medicamentos SOS que não pertencem a um
+          residente. Quem toma é sempre registrado no nome da pessoa, na dose
+          avulsa da ronda.
+        </p>
+      ) : (
+        <p>
+          {residente.nascimento ? `Nascimento: ${dataLocal(residente.nascimento)}` : 'Sem data de nascimento'}
+          {residente.observacoes ? ` — ${residente.observacoes}` : ''}
+        </p>
+      )}
 
       {aviso && (
         <p className={`aviso ${aviso.tipo === 'ok' ? 'aviso-ok' : 'aviso-erro'}`}>
@@ -286,22 +308,26 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
         </ul>
       )}
 
-      <div className="acoes-item">
-        <button
-          type="button"
-          className={`botao-mini ${residente.ativo ? 'botao-mini-perigo' : ''}`}
-          disabled={ocupado}
-          onClick={async () => {
-            const r = await chamarRpc('definir_ativo_residente', {
-              p_idoso_id: residente.id,
-              p_ativo: !residente.ativo
-            })
-            if (r) onAtualizado()
-          }}
-        >
-          {residente.ativo ? 'Desativar residente' : 'Reativar residente'}
-        </button>
-      </div>
+      {/* O estoque da casa não se desativa: a caixa comum continua na
+          prateleira (o banco também recusa — DEC-044). */}
+      {!residente.eh_sentinela && (
+        <div className="acoes-item">
+          <button
+            type="button"
+            className={`botao-mini ${residente.ativo ? 'botao-mini-perigo' : ''}`}
+            disabled={ocupado}
+            onClick={async () => {
+              const r = await chamarRpc('definir_ativo_residente', {
+                p_idoso_id: residente.id,
+                p_ativo: !residente.ativo
+              })
+              if (r) onAtualizado()
+            }}
+          >
+            {residente.ativo ? 'Desativar residente' : 'Reativar residente'}
+          </button>
+        </div>
+      )}
 
       {form === 'residente' && (
         <FormResidente
@@ -324,6 +350,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
       )}
       {form === 'medicamento' && (
         <FormMedicamento
+          daCasa={residente.eh_sentinela}
           ocupado={ocupado}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
@@ -533,6 +560,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
       {form?.modo === 'medicamento' && (
         <FormMedicamento
           medicamento={medicamento}
+          daCasa={residente.eh_sentinela}
           ocupado={ocupado}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {

@@ -185,7 +185,6 @@ export default function Ronda({ turno, recarga }) {
 
       {sosAberto && (
         <DoseSos
-          turno={turno}
           onFechar={() => setSosAberto(false)}
           onRegistrada={(mensagem) => {
             setSosAberto(false)

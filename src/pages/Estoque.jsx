@@ -116,10 +116,17 @@ function EstoqueAtual() {
     carregar()
   }, [carregar])
 
+  // Dois blocos (DEC-044): o estoque da casa é uma prateleira à parte, não um
+  // "residente" no meio dos outros — espelha a caixa comum da bancada.
   const grupos = useMemo(() => {
     if (!itens) return null
     const porResidente = new Map()
+    const casa = []
     for (const item of itens) {
+      if (item.idoso_da_casa) {
+        casa.push(item)
+        continue
+      }
       if (!porResidente.has(item.idoso_id)) {
         porResidente.set(item.idoso_id, {
           nome: item.nome_idoso,
@@ -129,7 +136,7 @@ function EstoqueAtual() {
       }
       porResidente.get(item.idoso_id).itens.push(item)
     }
-    return [...porResidente.values()]
+    return { casa, residentes: [...porResidente.values()] }
   }, [itens])
 
   if (grupos === null) {
@@ -173,9 +180,29 @@ function EstoqueAtual() {
         </section>
       )}
 
+      {grupos.casa.length > 0 && (
+        <section className="secao">
+          <h2>Medicamentos da casa</h2>
+          <div className="card card-casa">
+            <p className="estoque-casa-explicacao">
+              SOS da caixa comum: não pertencem a um residente, mas quem toma é
+              sempre registrado no nome dela.
+            </p>
+            {grupos.casa.map((item) => (
+              <ItemEstoque
+                key={item.medicamento_id}
+                item={item}
+                lotes={lotesPorMed.get(item.medicamento_id) ?? []}
+                onAbrir={() => setAbertoId(item.medicamento_id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="secao">
         <h2>Estoque por residente</h2>
-        {grupos.map((grupo) => (
+        {grupos.residentes.map((grupo) => (
           <div className="card" key={grupo.nome}>
             <h3 className="estoque-residente">
               {grupo.nome}
@@ -287,6 +314,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
           {item.nome} {item.dosagem}
         </h2>
         {item.tipo === 'sos' && <span className="chip chip-sos">SOS</span>}
+        {item.idoso_da_casa && <span className="chip chip-casa">Da casa</span>}
       </div>
       <p>
         {item.nome_idoso}

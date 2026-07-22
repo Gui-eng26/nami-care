@@ -34,7 +34,18 @@ function rotuloCatalogo(item) {
 //
 // Componente compartilhado pelas duas portas de cadastro: a gestão de
 // residentes e o atalho "+ Medicamento" da aba Estoque.
-export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFechar, onSalvar }) {
+// `daCasa`: o medicamento é do estoque compartilhado da casa (DEC-044). Nesse
+// caso o tipo é SOS e ponto — a casa não tem contínuo compartilhado (contínuo
+// tem horário, e horário é de alguém). O banco também recusa qualquer outra
+// coisa; aqui o seletor só não oferece o que seria rejeitado.
+export default function FormMedicamento({
+  medicamento,
+  daCasa = false,
+  subtitulo,
+  ocupado,
+  onFechar,
+  onSalvar
+}) {
   // catalogo escolhido: { id, nome, dosagem, forma_farmaceutica } | null.
   const [catalogo, setCatalogo] = useState(
     medicamento
@@ -54,7 +65,7 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
   const [erroCatalogo, setErroCatalogo] = useState(null)
 
   const [posologia, setPosologia] = useState(medicamento?.posologia ?? '')
-  const [tipo, setTipo] = useState(medicamento?.tipo ?? 'continuo')
+  const [tipo, setTipo] = useState(daCasa ? 'sos' : medicamento?.tipo ?? 'continuo')
   const [estoqueMinimo, setEstoqueMinimo] = useState(
     medicamento?.estoque_minimo != null ? String(Number(medicamento.estoque_minimo)) : ''
   )
@@ -295,13 +306,20 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
             Posologia (orientação)
             <textarea rows={2} value={posologia} onChange={(e) => setPosologia(e.target.value)} />
           </label>
-          <label>
-            Tipo
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
-              <option value="continuo">Contínuo (com horários de ronda)</option>
-              <option value="sos">SOS (dose avulsa, sem horários)</option>
-            </select>
-          </label>
+          {daCasa ? (
+            <p className="card-sos">
+              Medicamento da casa é sempre <strong>SOS</strong> (dose avulsa):
+              contínuo tem horário de ronda, e horário é de um residente.
+            </p>
+          ) : (
+            <label>
+              Tipo
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                <option value="continuo">Contínuo (com horários de ronda)</option>
+                <option value="sos">SOS (dose avulsa, sem horários)</option>
+              </select>
+            </label>
+          )}
           {tipo === 'sos' && (
             <label>
               Estoque mínimo de segurança (opcional)

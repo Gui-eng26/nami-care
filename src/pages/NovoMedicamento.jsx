@@ -13,6 +13,10 @@ import FormMedicamento from '../components/FormMedicamento.jsx'
 //
 // Como todo medicamento pertence a um residente (medicamentos.idoso_id é NOT
 // NULL), o primeiro passo é escolher para quem é.
+//
+// Desde a Sessão #12 o "Da Casa" (DEC-044) entra nessa lista, destacado: é
+// assim — e só assim — que uma compra do estoque compartilhado é registrada.
+// Escondê-lo aqui tornaria o medicamento da casa incadastrável.
 export default function NovoMedicamento({ onVoltar }) {
   const [residentes, setResidentes] = useState(null)
   const [residente, setResidente] = useState(null)
@@ -22,8 +26,9 @@ export default function NovoMedicamento({ onVoltar }) {
   useEffect(() => {
     supabase
       .from('idosos')
-      .select('id, nome')
+      .select('id, nome, eh_sentinela')
       .eq('ativo', true)
+      .order('eh_sentinela', { ascending: false })
       .order('nome')
       .then(({ data, error }) => setResidentes(error ? [] : data))
   }, [])
@@ -101,13 +106,18 @@ export default function NovoMedicamento({ onVoltar }) {
             <button
               key={r.id}
               type="button"
-              className="botao-cuidador"
+              className={`botao-cuidador ${r.eh_sentinela ? 'botao-cuidador-casa' : ''}`}
               onClick={() => {
                 setAviso(null)
                 setResidente(r)
               }}
             >
               {r.nome}
+              {r.eh_sentinela && (
+                <span className="item-gestao-detalhe">
+                  Estoque da casa — SOS compartilhado
+                </span>
+              )}
             </button>
           ))}
           {residentes.length === 0 && <p>Nenhum residente ativo cadastrado.</p>}
@@ -116,7 +126,12 @@ export default function NovoMedicamento({ onVoltar }) {
 
       {residente && (
         <FormMedicamento
-          subtitulo={`Para ${residente.nome}`}
+          daCasa={residente.eh_sentinela}
+          subtitulo={
+            residente.eh_sentinela
+              ? 'Para o estoque da casa (SOS compartilhado)'
+              : `Para ${residente.nome}`
+          }
           ocupado={ocupado}
           onFechar={() => setResidente(null)}
           onSalvar={salvar}

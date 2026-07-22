@@ -1074,3 +1074,138 @@ gestão**, fora da ronda — como a Thais já faz. Migration
 
 Migration `20260722000400_lotes_visiveis`. Tema Sereníssima, 375px, sem overflow
 horizontal.
+
+## DEC-044 — Estoque da casa por residente-sentinela "Da Casa"
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #12)
+
+**Contexto:** a casa tem SOS que não pertencem a ninguém em particular — dipirona
+para dor de cabeça, antitérmico, antiemético; a caixa comum da bancada. O app
+exigia dono para todo medicamento (`medicamentos.idoso_id` NOT NULL).
+
+**Princípio que governa a decisão (e a Sessão #12 inteira):** o **estoque** pode
+ser da casa; o **consumo tem sempre um dono**. "Saiu uma dipirona da casa, não sei
+pra quem" é o rastro opaco que o Nami Care existe para eliminar.
+
+**Decisão (Modelo B):** um **residente reservado** carrega o estoque
+compartilhado.
+- `medicamentos.idoso_id` **permanece NOT NULL** — o schema de medicamentos não
+  muda, e os ~16 pontos do banco que fazem `join idosos` continuam intactos. Um
+  medicamento da casa é um medicamento normal pendurado nesse residente.
+- Identificação por **`idosos.eh_sentinela`** (booleano, com índice único parcial:
+  no máximo um sentinela), nunca por id hardcodado — nada no código nem no seed
+  depende de um uuid fixo. Rótulo inicial: "Da Casa", renomeável na gestão.
+- **Sem flag `eh_da_casa` em medicamentos** — avaliada e descartada: um
+  medicamento é da casa porque pertence AO residente da casa, e pronto. O único
+  lugar que precisa excluir o sentinela (o seletor de "quem tomou", DEC-047)
+  simplesmente não o inclui.
+- A linha nasce de **bootstrap idempotente** (`fn_bootstrap_residente_da_casa`),
+  chamado pela migration uma vez e pelo seed a cada `--reset` — não é migration de
+  dados: um banco recriado do zero chega ao mesmo estado sozinho.
+- **Medicamento da casa é sempre `tipo = 'sos'`**, garantido por trigger (pega
+  também o seed, que escreve com service role por fora das RPCs): contínuo tem
+  horário de ronda, e horário é de um residente. Contínuo compartilhado não
+  existe; se um dia a casa precisar, é decisão nova.
+- **O sentinela não é desativável** (`residente_da_casa_fixo`): desativá-lo tiraria
+  o estoque da casa da cobertura e do fluxo SOS sem que nada tivesse mudado no
+  mundo físico — a caixa comum continua na prateleira. Renomear/editar segue livre.
+
+**Onde aparece, tela a tela:** gestão de residentes **aparece destacado em
+vermelho** (é identificação visual, não alerta de erro) e fora da contagem de
+"ativos"; "+ Medicamento" **aparece** (é assim que uma compra entra no estoque da
+casa — escondê-lo tornaria o medicamento da casa incadastrável); estoque atual
+aparece em **seção própria "Medicamentos da casa"**; adesão **não** aparece
+(DEC-046); seletor de quem toma **não** aparece (DEC-047); ronda não aparece por
+construção (é SOS, não tem grade).
+
+Estoque/lote/validade/FEFO da Sessão #11 valem sem exceção — nada de estoque foi
+reimplementado. Migration `20260722000500_residente_da_casa` (que também acrescenta
+`idoso_da_casa` à view `cobertura_estoque`, o único dado novo que as telas pedem).
+
+## DEC-045 — Dono real da dose: `administracoes.idoso_id`
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #12)
+
+**Contexto:** `administracoes` não tinha "quem tomou" — o residente sempre foi
+derivado por `administracoes.medicamento_id → medicamentos.idoso_id`. Para um
+medicamento da casa essa corrente aponta para o sentinela, não para a pessoa.
+
+**Decisão:** coluna **`idoso_id` (nullable, FK para `idosos`)** em
+`administracoes` = o residente que efetivamente tomou. É a **única mudança de
+schema** do Modelo B.
+
+**Preenchimento — três casos, um só caminho preenche:**
+| dose | `administracoes.idoso_id` |
+|---|---|
+| agendada (contínua, `horario_id` não nulo) | **nulo** |
+| SOS de medicamento **de um residente** | **nulo** (o dono vem do medicamento) |
+| SOS de medicamento **da casa** | **preenchido** com quem tomou |
+
+**Resolução do dono (uma regra, vale para todos):**
+`coalesce(administracoes.idoso_id, medicamentos.idoso_id)` — o residente-que-tomou
+se preenchido, senão o dono do medicamento. Aplica-se na adesão (DEC-046) e em
+qualquer lugar que derive o residente de uma dose.
+
+**Integridade por trigger, não por CHECK** (`fn_administracao_dono_valido`): a
+regra depende de uma linha de `idosos` (o medicamento é da casa?), fora do alcance
+de um CHECK. Os dois lados são fechados — SOS da casa **sem** dono é rejeitado, e
+dose de medicamento de residente **com** dono também é: divergência entre dois
+donos é pior que a ausência de um, porque parece informação. O trigger recusa
+ainda o sentinela como "quem tomou" e horário agendado em medicamento da casa.
+
+**A dose agendada não muda em nada** — mesmo insert, mesma tela da ronda, coluna
+nula. A imutabilidade (DEC-008) foi estendida à coluna nova. Migration
+`20260722000600_dono_da_dose`.
+
+## DEC-046 — Adesão conta pelo dono resolvido (estende a DEC-030)
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #12)
+
+**Contexto:** `relatorio_adesao` atribuía toda dose a `medicamentos.idoso_id`. A
+dipirona que a dona Maria tomou da caixa comum cairia na adesão do "Da Casa" — um
+residente que não existe, cobrindo justamente o que o relatório deve mostrar.
+
+**Decisão:** o residente de uma dose passa a ser o **dono resolvido** da DEC-045,
+`coalesce(a.idoso_id, m.idoso_id)`, **no trecho de SOS e no de doses agendadas** —
+nas agendadas é literalmente o mesmo valor de antes (a coluna é sempre nula ali);
+escrever o coalesce nos dois lugares deixa UMA regra na cabeça de quem lê, não
+duas. O filtro `p_idoso_id` segue o mesmo dono resolvido: a Maria vê, na adesão
+dela, também o que tomou da casa.
+
+**Consequência desejada:** o "Da Casa" **não gera linha de adesão** — como ninguém
+"é" a casa em consumo, nenhuma dose resolve para ele. A tela ainda o remove do
+seletor de residente, para não oferecer um filtro que sempre voltaria zero.
+
+O resto do relatório não muda: denominador materializado, as cinco categorias
+(DEC-030/034), pendentes do turno aberto, fronteira de dia no fuso da casa.
+Diferença linha a linha em relação à versão da Sessão #9: só o coalesce.
+Migration `20260722000700_adesao_dono_real`.
+
+## DEC-047 — Dose SOS reestruturada: quem toma → qual medicamento (revisa a DEC-014)
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #12)
+
+**Contexto:** a tela de dose avulsa montava a lista a partir do estoque SOS **por
+residente**: só aparecia quem já tinha um SOS próprio, e o medicamento vinha preso
+ao residente. Não havia como dar um SOS da casa a um residente qualquer.
+
+**Decisão — inverter a ordem:**
+1. **Quem toma:** todos os residentes ativos, **exceto o "Da Casa"**. É aqui, e só
+   aqui, que o sentinela é escondido — por não entrar na lista. A lista independe
+   de haver estoque: é justamente o ponto.
+2. **Qual medicamento:** os SOS ativos **daquele residente** + os SOS **da casa**,
+   numa lista só, com o saldo de cada. Os dois coexistem — a Maria pode ter o SOS
+   particular dela e também tomar da caixa comum; o da casa leva o selo "Da casa".
+3. **Quantidade** (meio-em-meio preservado) e registro com o **horário real** do
+   momento (`registrado_em` = agora; `horario_id` nulo, como sempre).
+4. **Dono da dose** gravado conforme a DEC-045.
+5. **Baixa de estoque:** trigger da DEC-008 + FEFO da DEC-042, sem nada novo.
+
+**Nota de implementação (decidida aqui): a dose SOS virou RPC.** Antes era INSERT
+direto do cliente. Como agora há regra a garantir, deixá-la no cliente seria pôr
+regra de negócio fora do banco. `registrar_dose_sos` valida e **normaliza**:
+recebe sempre quem tomou (é o passo 1 da tela — o cliente não precisa conhecer a
+regra) e decide se grava ou descarta o dono. Recusa medicamento não-SOS, inativo,
+da caixa de **outro** residente (`medicamento_de_outro_residente`) e o sentinela
+como quem toma. Para fechar a porta, a política de INSERT de `administracoes`
+passou a exigir `horario_id` não nulo: **INSERT direto do cliente = dose agendada**
+(o que a ronda sempre fez), SOS só pela RPC. Caminhos SECURITY DEFINER (a própria
+RPC, a resolução em lote de pendências) rodam como owner e não passam por RLS.
+
+**A ronda não muda.** Migration `20260722000800_dose_sos_reestruturada`.
