@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, ROTULO_MOVIMENTACAO, dataHoraLocal } from '../lib/formato.js'
+import { fmtQtd, ROTULO_MOVIMENTACAO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
 import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
 import NovoMedicamento from './NovoMedicamento.jsx'
 
@@ -90,15 +90,26 @@ function rotuloSituacao(item) {
 // cada residente tem o próprio estoque; itens em alerta sobem para o topo.
 function EstoqueAtual() {
   const [itens, setItens] = useState(null)
+  const [lotesPorMed, setLotesPorMed] = useState(() => new Map())
   const [abertoId, setAbertoId] = useState(null)
 
   const carregar = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('cobertura_estoque')
-      .select('*')
-      .order('nome_idoso')
-      .order('nome')
+    const [{ data, error }, lotesRes] = await Promise.all([
+      supabase.from('cobertura_estoque').select('*').order('nome_idoso').order('nome'),
+      // Lotes vivos (saldo > 0), próximo a vencer primeiro (DEC-043).
+      supabase
+        .from('lotes_estoque_vivo')
+        .select('medicamento_id, lote, validade, saldo_atual')
+        .order('validade', { ascending: true })
+        .order('data_entrada', { ascending: true })
+    ])
     if (!error) setItens(data)
+    const mapa = new Map()
+    for (const l of lotesRes.data ?? []) {
+      if (!mapa.has(l.medicamento_id)) mapa.set(l.medicamento_id, [])
+      mapa.get(l.medicamento_id).push(l)
+    }
+    setLotesPorMed(mapa)
   }, [])
 
   useEffect(() => {
@@ -134,6 +145,7 @@ function EstoqueAtual() {
     return (
       <FichaEstoque
         item={aberto}
+        lotes={lotesPorMed.get(aberto.medicamento_id) ?? []}
         onVoltar={() => setAbertoId(null)}
         onMovimentado={carregar}
       />
@@ -152,6 +164,7 @@ function EstoqueAtual() {
               <ItemEstoque
                 key={item.medicamento_id}
                 item={item}
+                lotes={lotesPorMed.get(item.medicamento_id) ?? []}
                 mostrarResidente
                 onAbrir={() => setAbertoId(item.medicamento_id)}
               />
@@ -172,6 +185,7 @@ function EstoqueAtual() {
               <ItemEstoque
                 key={item.medicamento_id}
                 item={item}
+                lotes={lotesPorMed.get(item.medicamento_id) ?? []}
                 onAbrir={() => setAbertoId(item.medicamento_id)}
               />
             ))}
@@ -182,7 +196,7 @@ function EstoqueAtual() {
   )
 }
 
-function ItemEstoque({ item, mostrarResidente = false, onAbrir }) {
+function ItemEstoque({ item, lotes = [], mostrarResidente = false, onAbrir }) {
   const situacao = rotuloSituacao(item)
   return (
     <button type="button" className={`dose ${item.ativo ? '' : 'item-inativo'}`} onClick={onAbrir}>
@@ -199,14 +213,30 @@ function ItemEstoque({ item, mostrarResidente = false, onAbrir }) {
           <> · comprar {fmtQtd(item.sugestao_compra)}</>
         )}
       </span>
+      <ResumoLotes lotes={lotes} />
       <span className="dose-acao">›</span>
     </button>
   )
 }
 
+// Lotes vivos por validade (próximo a vencer em destaque — DEC-043). Compacto
+// na lista; a ficha mostra a versão completa.
+function ResumoLotes({ lotes }) {
+  if (!lotes || lotes.length === 0) return null
+  return (
+    <span className="estoque-lotes">
+      {lotes.map((l, i) => (
+        <span key={l.lote ?? i} className={`lote-chip ${i === 0 ? 'lote-chip-proximo' : ''}`}>
+          venc. {dataLocal(l.validade)} · {fmtQtd(l.saldo_atual)}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 // Ficha do medicamento: saldo, situação, movimentações manuais e o extrato —
 // a auditoria linha a linha que substitui o caderno.
-function FichaEstoque({ item, onVoltar, onMovimentado }) {
+function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
   const [extrato, setExtrato] = useState(null)
   const [modal, setModal] = useState(null) // 'entrada' | 'ajuste' | 'perda'
   const [aviso, setAviso] = useState(null)
@@ -214,7 +244,9 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
   const carregarExtrato = useCallback(async () => {
     const { data, error } = await supabase
       .from('movimentacoes_estoque')
-      .select('id, tipo, quantidade, motivo, criado_em, cuidadores (nome)')
+      .select(
+        'id, tipo, quantidade, motivo, criado_em, cuidadores (nome), movimentacao_lote (quantidade, lotes_estoque (lote, validade))'
+      )
       .eq('medicamento_id', item.medicamento_id)
       .order('criado_em', { ascending: false })
       .limit(50)
@@ -272,6 +304,28 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
         )}
       </p>
 
+      <div className="lotes-prateleira">
+        <h3 className="lotes-titulo">Lotes na prateleira</h3>
+        {lotes.length === 0 ? (
+          <p className="lotes-vazio">Sem lote com saldo. Registre uma compra para começar.</p>
+        ) : (
+          <ul className="lotes-lista">
+            {lotes.map((l, i) => (
+              <li key={l.lote ?? i} className={`lote-linha ${i === 0 ? 'lote-linha-proximo' : ''}`}>
+                <span className="lote-nome">
+                  {l.lote || 'Lote não identificado'}
+                  {i === 0 && lotes.length > 1 && <span className="chip chip-proximo"> Próximo a vencer</span>}
+                </span>
+                <span className="lote-detalhe">
+                  Vence {dataLocal(l.validade)} · {fmtQtd(l.saldo_atual)}{' '}
+                  {item.forma_farmaceutica || 'un.'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {aviso && (
         <p className={`aviso ${aviso.tipo === 'ok' ? 'aviso-ok' : 'aviso-erro'}`}>{aviso.texto}</p>
       )}
@@ -299,7 +353,15 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
         <p>Nenhuma movimentação registrada.</p>
       ) : (
         <ul className="lista-extrato">
-          {extrato.map((mov) => (
+          {extrato.map((mov) => {
+            const resumoLotes = resumoLotesMov(
+              (mov.movimentacao_lote ?? []).map((ml) => ({
+                lote: ml.lotes_estoque?.lote,
+                validade: ml.lotes_estoque?.validade,
+                quantidade: ml.quantidade
+              }))
+            )
+            return (
             <li key={mov.id} className="extrato-linha">
               <span className="extrato-info">
                 <span className="extrato-tipo">{ROTULO_MOVIMENTACAO[mov.tipo]}</span>
@@ -308,12 +370,14 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
                   {mov.cuidadores ? ` — ${mov.cuidadores.nome}` : ''}
                 </span>
                 {mov.motivo && <span className="extrato-detalhe">{mov.motivo}</span>}
+                {resumoLotes && <span className="extrato-detalhe extrato-lote">Lote: {resumoLotes}</span>}
               </span>
               <span className={`extrato-qtd ${Number(mov.quantidade) > 0 ? 'extrato-qtd-positiva' : 'extrato-qtd-negativa'}`}>
                 {Number(mov.quantidade) > 0 ? '+' : '−'}{fmtQtd(Math.abs(Number(mov.quantidade)))}
               </span>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 
@@ -327,6 +391,8 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
               {
                 p_medicamento_id: item.medicamento_id,
                 p_quantidade: valores.quantidade,
+                p_validade: valores.validade,
+                p_lote: valores.lote || null,
                 p_data: valores.data,
                 p_observacao: valores.observacao || null
               },
@@ -345,7 +411,9 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
               {
                 p_medicamento_id: item.medicamento_id,
                 p_quantidade_contada: valores.contada,
-                p_observacao: valores.observacao || null
+                p_observacao: valores.observacao || null,
+                p_lote: valores.lote || null,
+                p_validade: valores.validade || null
               },
               (r) =>
                 r.sem_diferenca
@@ -379,6 +447,8 @@ function FichaEstoque({ item, onVoltar, onMovimentado }) {
 function ModalEntrada({ item, onFechar, onSalvar }) {
   const [quantidade, setQuantidade] = useState('')
   const [data, setData] = useState(hojeLocal())
+  const [lote, setLote] = useState('')
+  const [validade, setValidade] = useState('')
   const [observacao, setObservacao] = useState('')
   const [salvando, setSalvando] = useState(false)
 
@@ -397,6 +467,8 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
             await onSalvar({
               quantidade: Number(quantidade),
               data,
+              lote: lote.trim(),
+              validade,
               observacao: observacao.trim()
             })
             setSalvando(false)
@@ -427,6 +499,25 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
               />
             </label>
           </div>
+          <div className="formulario-linha">
+            <label>
+              Lote (opcional)
+              <input
+                value={lote}
+                placeholder="código da caixa"
+                onChange={(e) => setLote(e.target.value)}
+              />
+            </label>
+            <label>
+              Validade
+              <input
+                type="date"
+                value={validade}
+                onChange={(e) => setValidade(e.target.value)}
+                required
+              />
+            </label>
+          </div>
           <label>
             Observação (opcional)
             <input
@@ -451,8 +542,16 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
 
 function ModalAjuste({ item, onFechar, onSalvar }) {
   const [contada, setContada] = useState('')
+  const [lote, setLote] = useState('')
+  const [validade, setValidade] = useState('')
   const [observacao, setObservacao] = useState('')
+  const [erro, setErro] = useState(null)
   const [salvando, setSalvando] = useState(false)
+
+  // A recontagem para CIMA (contou mais do que o sistema) achou unidades que
+  // pertencem a um lote físico — a validade é obrigatória (DEC-041). Para baixo
+  // (ou igual), lote/validade são ignorados: o abate é por FEFO.
+  const paraCima = contada !== '' && Number(contada) > Number(item.saldo)
 
   return (
     <div className="modal-fundo" onClick={onFechar}>
@@ -468,8 +567,18 @@ function ModalAjuste({ item, onFechar, onSalvar }) {
           className="formulario"
           onSubmit={async (e) => {
             e.preventDefault()
+            if (paraCima && !validade) {
+              setErro('Você contou mais do que o sistema: informe a validade do lote encontrado.')
+              return
+            }
+            setErro(null)
             setSalvando(true)
-            await onSalvar({ contada: Number(contada), observacao: observacao.trim() })
+            await onSalvar({
+              contada: Number(contada),
+              observacao: observacao.trim(),
+              lote: paraCima ? lote.trim() : '',
+              validade: paraCima ? validade : ''
+            })
             setSalvando(false)
           }}
         >
@@ -481,11 +590,36 @@ function ModalAjuste({ item, onFechar, onSalvar }) {
               step="0.5"
               inputMode="decimal"
               value={contada}
-              onChange={(e) => setContada(e.target.value)}
+              onChange={(e) => {
+                setErro(null)
+                setContada(e.target.value)
+              }}
               required
               autoFocus
             />
           </label>
+          {paraCima && (
+            <div className="formulario-linha">
+              <label>
+                Lote encontrado (opcional)
+                <input
+                  value={lote}
+                  placeholder="código da caixa"
+                  onChange={(e) => setLote(e.target.value)}
+                />
+              </label>
+              <label>
+                Validade
+                <input
+                  type="date"
+                  value={validade}
+                  onChange={(e) => setValidade(e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+          )}
+          {erro && <p className="aviso aviso-erro">{erro}</p>}
           <label>
             Observação (opcional)
             <input

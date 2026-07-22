@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, ROTULO_SUBTIPO, dataHoraLocal } from '../lib/formato.js'
+import { fmtQtd, ROTULO_SUBTIPO, dataHoraLocal, resumoLotesMov } from '../lib/formato.js'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -373,6 +373,9 @@ function ExtratoDetalhe({ medicamentoId, periodo, onVoltar }) {
                     {mov.cuidador ? ` — ${mov.cuidador}` : ''}
                   </span>
                   {mov.motivo && <span className="extrato-detalhe">{mov.motivo}</span>}
+                  {resumoLotesMov(mov.lotes) && (
+                    <span className="extrato-detalhe extrato-lote">Lote: {resumoLotesMov(mov.lotes)}</span>
+                  )}
                 </span>
                 <span
                   className={`extrato-qtd ${positiva ? 'extrato-qtd-positiva' : 'extrato-qtd-negativa'}`}

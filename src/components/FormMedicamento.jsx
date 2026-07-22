@@ -60,9 +60,12 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
   )
 
   // Estoque inicial (Sessão #8) — só no cadastro; em branco = sem movimentação.
+  // Desde a Sessão #11 leva lote (opcional) e validade (obrigatória — DEC-041).
   const [qtdInicial, setQtdInicial] = useState('')
   const [origemInicial, setOrigemInicial] = useState('compra')
   const [dataInicial, setDataInicial] = useState(hojeLocal())
+  const [loteInicial, setLoteInicial] = useState('')
+  const [validadeInicial, setValidadeInicial] = useState('')
 
   // Horários (Sessão #10) — só no cadastro de contínuo. Começa com uma linha
   // em branco: a grade é o que faz o medicamento existir na ronda.
@@ -154,7 +157,9 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
           ? {
               quantidade: Number(qtdInicial),
               origem: origemInicial,
-              data: origemInicial === 'compra' ? dataInicial : null
+              data: origemInicial === 'compra' ? dataInicial : null,
+              lote: loteInicial.trim(),
+              validade: validadeInicial
             }
           : null
     })
@@ -409,6 +414,25 @@ export default function FormMedicamento({ medicamento, subtitulo, ocupado, onFec
                       </option>
                     </select>
                   </label>
+                  <div className="formulario-linha">
+                    <label>
+                      Lote (opcional)
+                      <input
+                        value={loteInicial}
+                        placeholder="código da caixa"
+                        onChange={(e) => setLoteInicial(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Validade
+                      <input
+                        type="date"
+                        value={validadeInicial}
+                        onChange={(e) => setValidadeInicial(e.target.value)}
+                        required
+                      />
+                    </label>
+                  </div>
                   {origemInicial === 'compra' && (
                     <label>
                       Data da compra

@@ -306,6 +306,38 @@ OK; advisors sem nada novo; seed resetado. **Nada do go-live foi tocado.**
 (muda o núcleo do ledger — a baixa passa a escolher lote, provável FEFO) e
 "medicamento da casa" (SOS sem residente, `idoso_id` NOT NULL).
 
+## Sessão 11 — Estoque por lote e validade / FEFO ✅ (2026-07-22)
+
+A maior mudança estrutural desde o MVP. O saldo deixa de ser um número e passa a
+ser rastreado por **lote físico com validade**, com saída automática por **FEFO**
+— espelhando o que a Thais faz na bancada, para aposentar a planilha de Excel.
+Decisões **DEC-040..043**; 4 migrations novas.
+
+- **Modelo (DEC-040):** `lotes_estoque` (saldo físico por validade) + vínculo
+  `movimentacao_lote` (1-para-N, porque uma saída FEFO varre vários lotes). O
+  ledger (`movimentacoes_estoque`) segue intocado em forma — fonte do
+  extrato/cobertura/adesão. `saldo_estoque` passa a derivar da soma dos lotes.
+  Invariante testado: `sum(lotes) == ledger`. Dois helpers transacionais
+  (`fn_registrar_lote_entrada`, `fn_consumir_fefo`).
+- **Entradas (DEC-041):** os três caminhos (cadastro, recompra, ajuste-para-cima)
+  capturam validade (obrigatória) + lote (opcional) e criam o lote junto da
+  movimentação.
+- **Saídas FEFO (DEC-042):** dose, ajuste-para-baixo e perda abatem por validade
+  mais próxima, varrendo múltiplos lotes; empate → data_entrada. **A ronda não
+  muda** (baixa automática e silenciosa — DEC-008 estendida). Super-administração
+  é best-effort (grava a saída cheia, lotes piso em zero).
+- **Visibilidade (DEC-043):** estoque atual mostra lote/validade por medicamento
+  (próximo a vencer em destaque); o extrato indica o(s) lote(s) de cada movimentação.
+
+Bateria SQL em rollback (FEFO num lote, cruzando dois, zerando, 0,5+0,5, empate,
+ajuste-baixo, perda, best-effort, invariante); seed com 24 lotes e **0
+divergências**; verificação no navegador a 375px; build OK; advisors sem nada
+novo. **Nada do go-live foi tocado.**
+
+**Fora de escopo, aguardando sessão própria:** categoria "agudo"; início de
+tratamento / abertura de caixa; alerta de vencimento próximo; "medicamento da
+casa"; escolha manual de lote na perda.
+
 ---
 
 ## Fora de escopo do MVP (backlog pós-piloto)

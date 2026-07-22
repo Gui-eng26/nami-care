@@ -31,3 +31,26 @@ export function dataHoraLocal(iso) {
     timeZone: 'America/Sao_Paulo'
   })
 }
+
+// Data sem hora ('yyyy-mm-dd' → 'dd/mm/aaaa'). Formata a string direto, sem
+// passar por Date, para a validade (um DATE) não deslizar de fuso.
+export function dataLocal(iso) {
+  if (!iso) return ''
+  const [y, m, d] = String(iso).slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+// Rótulo curto de um lote para a cuidadora (sem jargão). Lote sem código vira
+// "lote não identificado" (DEC-041).
+export function rotuloLote(lote) {
+  return lote || 'lote não identificado'
+}
+
+// Resumo dos lotes de UMA movimentação do extrato (DEC-043): a entrada mostra o
+// lote que criou; a saída, de qual(is) lote(s) saiu, com a quantidade de cada.
+export function resumoLotesMov(lotes) {
+  if (!lotes || lotes.length === 0) return null
+  return lotes
+    .map((l) => `${fmtQtd(Math.abs(Number(l.quantidade)))} de ${rotuloLote(l.lote)} (venc. ${dataLocal(l.validade)})`)
+    .join(' · ')
+}

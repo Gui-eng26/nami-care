@@ -656,6 +656,94 @@ body {
   color: var(--cor-alerta);
 }
 
+/* Lotes (Sessão #11 — DEC-043). Linha compacta de chips na lista de estoque. */
+.estoque-lotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.125rem;
+}
+
+.lote-chip {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  color: var(--cor-texto-suave);
+  background: var(--cor-fundo-suave);
+  border: 1px solid var(--cor-borda);
+  white-space: nowrap;
+}
+
+.lote-chip-proximo {
+  color: var(--cor-primaria-texto);
+  background: #f3ead3;
+  border-color: #e2d3a8;
+}
+
+/* Ficha: lotes na prateleira, um por linha, ordenados por validade. */
+.lotes-prateleira {
+  margin: 0.75rem 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+  background: var(--cor-fundo-suave);
+}
+
+.lotes-titulo {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--cor-primaria-texto);
+  margin-bottom: 0.375rem;
+}
+
+.lotes-vazio {
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+.lotes-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lote-linha {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 8px;
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+}
+
+.lote-linha-proximo {
+  border-color: #e2d3a8;
+  background: #fffdf6;
+}
+
+.lote-nome {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.lote-detalhe {
+  font-size: 0.75rem;
+  color: var(--cor-texto-suave);
+}
+
+.chip-proximo {
+  color: var(--cor-primaria-texto);
+  background: #f3ead3;
+}
+
+/* Lote no extrato de movimentações. */
+.extrato-lote {
+  font-style: italic;
+}
+
 .lista-extrato {
   list-style: none;
   display: flex;

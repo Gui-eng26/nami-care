@@ -940,3 +940,137 @@ medicamento ou por horário). Um número configurável exigiria tela, decisão d
 quem configura e um valor-padrão que continuaria sendo esta mesma escolha —
 complexidade sem ganho num piloto de casa única. Se a parametrização virar
 necessidade real no uso, ela nasce de dado observado, não de suposição.
+
+## DEC-040 — Rastreamento de estoque por lote e validade: modelo de duas verdades
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #11)
+
+**Contexto:** até aqui o estoque era um saldo numérico por medicamento — o ledger
+(`movimentacoes_estoque`) somava entradas/saídas e a view `saldo_estoque` derivava
+um número. O sistema sabia *quanto* tinha, não *quais* unidades, de que lote, com
+que validade. A Thais controla isso em Excel (data de entrada, lote, validade,
+quantidade) e opera FEFO na bancada — sempre abre a caixa de validade mais
+próxima. O objetivo é o app refletir essa operação para aposentar a planilha.
+
+**Decisão — o saldo passa a ter duas verdades sincronizadas na mesma transação:**
+- **`lotes_estoque`** = verdade do **saldo físico** na prateleira, por validade.
+  Um lote físico de um medicamento: `medicamento_id`, `lote` (código impresso na
+  caixa; NULL = "não identificado"), `validade` (obrigatória — chave do FEFO),
+  `quantidade_inicial`, `saldo_atual` (≥ 0, meio-em-meio), `data_entrada`,
+  `origem` (compra | remanescente), `criado_em`. **Não há agrupamento:** duas
+  entradas do mesmo medicamento com o mesmo lote/validade são linhas separadas se
+  registradas separadamente (cada entrada é um lote).
+- **`movimentacoes_estoque` (ledger)** = verdade do **histórico e da cobertura**.
+  Continua **intocado em forma**: uma linha por administração/entrada/ajuste/perda,
+  com a UNIQUE em `administracao_id` preservada (DEC-008). Extrato (DEC-036),
+  cobertura (DEC-027) e adesão (DEC-030) seguem lendo dele.
+- **Vínculo `movimentacao_lote`** (movimentacao_id, lote_id, quantidade): como uma
+  saída pode varrer vários lotes (FEFO, DEC-042), a relação movimentação↔lote é
+  1-para-N. Tabela de ligação, e **não** uma linha de ledger por lote: mantém o
+  ledger com uma linha por movimentação (extrato legível, UNIQUE de baixa intacta)
+  e registra a distribuição por lote ao lado. `quantidade` com o **sinal do
+  ledger** (entrada > 0, saída < 0).
+
+**`saldo_estoque` passa a derivar da soma dos lotes** (`sum(saldo_atual)`), não
+mais do ledger. **Invariante** (testado): `sum(lotes.saldo_atual) == soma do
+ledger` por medicamento, em toda operação bem abastecida. A única divergência
+possível é a anomalia **pré-existente** de super-administração (dose além do
+físico): o ledger já tolerava saldo negativo; a prateleira física não pode ser
+negativa, então os lotes piso em zero e o ledger guarda o registro completo para
+auditoria/consumo. Não é um caso novo introduzido aqui — é o mesmo sinal de
+anomalia que o saldo negativo já era.
+
+**Atomicidade é o requisito nº 1:** lote e ledger são sempre escritos na mesma
+transação, por dois helpers internos (SECURITY DEFINER, execute revogado de
+`authenticated`): `fn_registrar_lote_entrada` (cria lote + vínculo +) e
+`fn_consumir_fefo` (abate por FEFO + vínculos −). Nenhum caminho grava num e não
+no outro. Migration `20260722000100_lotes_estoque_modelo`.
+
+**Alternativa descartada:** uma linha de `movimentacoes_estoque` por lote afetado
+numa saída. Quebraria a UNIQUE de `administracao_id` (uma dose → N linhas),
+poluiria o extrato (N linhas por dose) e violaria a DEC-008. O vínculo separado
+mantém o ledger estável.
+
+## DEC-041 — Entradas capturam lote + validade nos três caminhos
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #11)
+
+**Contexto:** há três caminhos de ENTRADA de estoque, e todos precisam capturar
+lote e validade para alimentar os lotes físicos (DEC-040).
+
+**Decisão:** toda entrada exige **validade** (obrigatória) + **quantidade**, com
+**lote** opcional (código da caixa; em branco = "não identificado") e data de
+entrada (default hoje). Cria a linha em `lotes_estoque` **junto** com a
+movimentação, na mesma transação:
+- **`registrar_entrada_estoque`** (recompra e estoque inicial de origem *compra*)
+  ganha `p_validade` e `p_lote`; origem do lote = `compra`, tipo da movimentação
+  segue `entrada_compra` (DEC-016).
+- **Estoque inicial no cadastro** ("+ Medicamento" e Residentes) passa por essas
+  RPCs via `src/lib/estoqueInicial.js` — sem RPC nova. Compra →
+  `registrar_entrada_estoque`; remanescente → `registrar_ajuste_estoque` (subida).
+- **Ajuste de recontagem PARA CIMA** (`registrar_ajuste_estoque`, contagem > saldo
+  dos lotes) exige validade: a unidade "a mais" pertence a algum lote físico que a
+  casa tem em mãos. Se ela não souber o código, aceita **lote nulo** ("não
+  identificado") com validade informada. Cria um lote de origem `remanescente`.
+
+**Decisão menor documentada:** validade **no passado** é aceita (um remanescente
+pode entrar já perto/na validade; sem alerta de vencimento nesta sessão, o ajuste
+é manual). Bloquear seria inventar regra que o roteiro não pediu.
+
+Migrations `20260722000200_entradas_com_lote` e `20260722000300_saidas_fefo`
+(a subida do ajuste). Erro novo: `validade_obrigatoria`.
+
+## DEC-042 — Saídas por FEFO automático (estende a DEC-008)
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #11)
+
+**Contexto:** três caminhos de SAÍDA — dose administrada (baixa automática, DEC-008),
+ajuste de recontagem para baixo, e perda. Todos precisam abater dos lotes na ordem
+que a casa já pratica na bancada.
+
+**Decisão:** **todos abatem por FEFO** — sempre do lote de validade mais próxima
+primeiro (`fn_consumir_fefo`), varrendo múltiplos lotes quando a quantidade excede
+o saldo do lote da frente. Cada lote tocado gera um vínculo `movimentacao_lote` (−).
+- **A ronda NÃO muda.** A cuidadora segue marcando tomado / recusado / não-tomado;
+  a baixa por lote é **automática e silenciosa** — nenhuma escolha de lote, nenhum
+  menu de inventário na ronda. Preserva a DEC-008 (baixa é consequência da
+  administração) e o princípio de que a ronda é sobre cuidado, não estoque. A
+  trigger `fn_baixa_automatica_estoque` grava a movimentação como antes e chama o
+  FEFO em seguida.
+- **O caso "0,5 restante" resolve-se sozinho:** o FEFO tira 0,5 do lote velho
+  (zera) e 0,5 do próximo para completar 1 — sem menu, sem órfão.
+- **Empate de validade:** desempata por `data_entrada` mais antiga (FIFO
+  secundário), depois `criado_em`. Documentado e testado.
+- **Ajuste para baixo** e **perda** seguem o mesmo FEFO; nunca excedem o físico
+  (a quantidade sai do próprio saldo contado/existente), então cobrem sempre por
+  completo.
+
+**Best-effort e super-administração (edge documentado):** `fn_consumir_fefo` abate
+o que houver e retorna quanto conseguiu. Se a dose excede o físico (medicamento
+cadastrado sem estoque, ou super-administração), a movimentação de saída é gravada
+**cheia** no ledger — a ronda nunca falha — e os lotes piso em zero. Nesse caso, e
+só nele, `sum(lotes)` fica abaixo do ledger: é a mesma anomalia que o saldo
+negativo já sinalizava (DEC-040), agora exibida como saldo zero (a prateleira não
+tem unidade negativa). Escolha do Guilherme: sem alerta de vencimento automático
+nesta sessão; ajuste manual da casa basta.
+
+**Sobras / lotes residuais:** um lote com saldo residual (ex.: 0,5) fica visível
+no estoque com seu lote e validade (DEC-043). Descarte/ajuste é ação **manual de
+gestão**, fora da ronda — como a Thais já faz. Migration
+`20260722000300_saidas_fefo`.
+
+## DEC-043 — Lote e validade visíveis no estoque atual e no extrato
+**Data:** 2026-07-22 | **Status:** aprovada (Sessão #11)
+
+**Decisão:**
+- No **estoque atual por residente**, junto de cada medicamento aparecem os lotes
+  vivos (saldo > 0), **por validade crescente**, com validade e saldo — o próximo a
+  vencer em destaque. Na lista, uma linha compacta de chips; na ficha do
+  medicamento, um bloco "Lotes na prateleira" com uma linha por lote e o selo
+  "Próximo a vencer" no primeiro. Fonte: view `lotes_estoque_vivo` (security
+  invoker). Rótulo legível, sem jargão.
+- O **extrato de movimentações** indica, em cada linha, o(s) lote(s) da
+  movimentação — entrada mostra o lote/validade que criou; saída, de qual(is)
+  lote(s) saiu, com a quantidade de cada. Reaproveita o vínculo `movimentacao_lote`:
+  no extrato consolidado (DEC-036) via `extrato_medicamento` (campo `lotes`); na
+  ficha da aba Estoque via embed direto de `movimentacao_lote → lotes_estoque`.
+
+Migration `20260722000400_lotes_visiveis`. Tema Sereníssima, 375px, sem overflow
+horizontal.

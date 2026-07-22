@@ -31,6 +31,7 @@ const MENSAGENS = {
   sem_turno_aberto: 'Abra um turno antes de registrar esta alteração.',
   medicamento_inativo: 'Medicamento desativado — reative-o antes de registrar compra.',
   data_futura: 'A data da compra não pode estar no futuro.',
+  validade_obrigatoria: 'Informe a validade do lote.',
   motivo_obrigatorio: 'Informe o motivo da perda.',
   estoque_minimo_invalido: 'O estoque mínimo deve ser zero ou mais, em passos de 0,5.',
   periodo_invalido: 'Período inválido: a data final vem antes da inicial.',

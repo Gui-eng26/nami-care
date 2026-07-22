@@ -16,18 +16,25 @@ import { mensagemErro } from './erros.js'
 export async function lancarEstoqueInicial(medicamentoId, inicial) {
   if (!inicial || !(inicial.quantidade > 0)) return null
 
+  // Lote + validade acompanham o estoque inicial (DEC-041): a compra cria um
+  // lote via registrar_entrada_estoque; o remanescente entra como recontagem
+  // para cima (registrar_ajuste_estoque), que também cria o lote do excedente.
   const { data, error } =
     inicial.origem === 'compra'
       ? await supabase.rpc('registrar_entrada_estoque', {
           p_medicamento_id: medicamentoId,
           p_quantidade: inicial.quantidade,
+          p_validade: inicial.validade,
+          p_lote: inicial.lote || null,
           p_data: inicial.data || null,
           p_observacao: 'Estoque inicial (cadastro do medicamento)'
         })
       : await supabase.rpc('registrar_ajuste_estoque', {
           p_medicamento_id: medicamentoId,
           p_quantidade_contada: inicial.quantidade,
-          p_observacao: 'Estoque inicial (remanescente na prateleira)'
+          p_observacao: 'Estoque inicial (remanescente na prateleira)',
+          p_lote: inicial.lote || null,
+          p_validade: inicial.validade
         })
 
   if (error) {

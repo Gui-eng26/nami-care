@@ -41,9 +41,12 @@ function falhar(etapa, error) {
 
 async function resetar() {
   console.log('Apagando dados existentes (--reset)…')
-  // Ordem inversa das dependências (FKs).
+  // Ordem inversa das dependências (FKs). movimentacao_lote e lotes_estoque
+  // (Sessão #11) entram antes de movimentacoes_estoque/medicamentos.
   for (const tabela of [
+    'movimentacao_lote',
     'movimentacoes_estoque',
+    'lotes_estoque',
     'administracoes',
     'horarios',
     'medicamentos',
@@ -124,8 +127,20 @@ async function main() {
   }
 
   // Medicamentos + horários + estoque inicial
+  // Estoque inicial vira uma entrada no ledger E um lote físico (DEC-040), nos
+  // dois na mesma passada — o invariante sum(lotes)==ledger nasce do seed. A
+  // validade varia por item para a aba Estoque atual mostrar datas diferentes
+  // (o próximo a vencer em destaque). data_entrada = hoje; origem = compra.
+  const hojeCasa = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  function validadeSeed(i) {
+    const d = new Date(`${hojeCasa}T12:00:00`)
+    d.setMonth(d.getMonth() + 8 + (i % 6)) // 8 a 13 meses à frente
+    return d.toLocaleDateString('en-CA')
+  }
   let totalHorarios = 0
+  let idxMed = 0
   for (const med of medicamentos) {
+    idxMed += 1
     const catId = await catalogoId(med.nome, med.dosagem, med.forma)
     const { data: medInserido, error: erroMed } = await supabase
       .from('medicamentos')
@@ -155,14 +170,41 @@ async function main() {
       totalHorarios += med.horarios.length
     }
 
-    const { error: erroEstoque } = await supabase.from('movimentacoes_estoque').insert({
-      medicamento_id: medInserido.id,
-      cuidador_id: cuidadorSeed.id,
-      tipo: 'entrada_compra',
-      quantidade: med.estoqueInicial,
-      motivo: 'Estoque inicial (seed)'
-    })
+    const { data: movInserida, error: erroEstoque } = await supabase
+      .from('movimentacoes_estoque')
+      .insert({
+        medicamento_id: medInserido.id,
+        cuidador_id: cuidadorSeed.id,
+        tipo: 'entrada_compra',
+        quantidade: med.estoqueInicial,
+        motivo: 'Estoque inicial (seed)'
+      })
+      .select('id')
+      .single()
     if (erroEstoque) falhar(`estoque inicial de ${med.nome} (${med.idoso})`, erroEstoque)
+
+    // Lote físico do estoque inicial + vínculo com a movimentação (DEC-040).
+    const { data: loteInserido, error: erroLote } = await supabase
+      .from('lotes_estoque')
+      .insert({
+        medicamento_id: medInserido.id,
+        lote: `SEED-${String(idxMed).padStart(3, '0')}`,
+        validade: validadeSeed(idxMed),
+        quantidade_inicial: med.estoqueInicial,
+        saldo_atual: med.estoqueInicial,
+        data_entrada: hojeCasa,
+        origem: 'compra'
+      })
+      .select('id')
+      .single()
+    if (erroLote) falhar(`lote inicial de ${med.nome} (${med.idoso})`, erroLote)
+
+    const { error: erroVinculo } = await supabase.from('movimentacao_lote').insert({
+      movimentacao_id: movInserida.id,
+      lote_id: loteInserido.id,
+      quantidade: med.estoqueInicial
+    })
+    if (erroVinculo) falhar(`vínculo de lote de ${med.nome} (${med.idoso})`, erroVinculo)
   }
 
   console.log('Seed concluído:')

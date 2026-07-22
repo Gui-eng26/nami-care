@@ -1,13 +1,41 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-21 (fim da Sessão #10)
+> Última atualização: 2026-07-22 (fim da Sessão #11)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #11 (2026-07-22) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_11.md`. A maior
+mudança estrutural desde o MVP: estoque rastreado por **lote físico com validade**
+e saída automática por **FEFO** (espelha a operação da Thais, aposenta a planilha).
+Decisões **DEC-040..043**; 4 migrations novas (`20260722000100..000400`).
+- [x] **Modelo (DEC-040):** `lotes_estoque` (saldo físico por validade) + vínculo
+      `movimentacao_lote` (1-para-N — uma saída FEFO varre vários lotes). O ledger
+      `movimentacoes_estoque` segue **intocado em forma** (fonte do
+      extrato/cobertura/adesão); `saldo_estoque` passa a derivar da soma dos lotes.
+      Dois helpers transacionais (`fn_registrar_lote_entrada`, `fn_consumir_fefo`,
+      SECURITY DEFINER com execute revogado). Invariante `sum(lotes)==ledger`.
+- [x] **Entradas (DEC-041):** cadastro/recompra/ajuste-para-cima capturam validade
+      (obrigatória) + lote (opcional); criam o lote junto da movimentação.
+      `registrar_entrada_estoque` ganhou `p_validade`/`p_lote`;
+      `registrar_ajuste_estoque` para cima cria lote de origem `remanescente`.
+- [x] **Saídas FEFO (DEC-042):** trigger de baixa, ajuste-para-baixo e perda abatem
+      por validade mais próxima, varrendo múltiplos lotes (empate → data_entrada).
+      **A ronda não mudou** — baixa automática e silenciosa (DEC-008 estendida).
+      Super-administração é best-effort (saída cheia, lotes piso em zero).
+- [x] **Visibilidade (DEC-043):** estoque atual mostra lote/validade por
+      medicamento (próximo a vencer em destaque, via `lotes_estoque_vivo`); extrato
+      indica o(s) lote(s) de cada movimentação.
+- [x] Bateria SQL em rollback; seed com 24 lotes e **0 divergências**; navegador a
+      375px (compra, FEFO multi-lote na perda, extrato com lote, ronda inalterada);
+      build OK; advisors sem nada novo; seed resetado. **Nada do go-live tocado.**
+- [ ] **Fora de escopo, aguardando sessão própria:** categoria "agudo"; abertura
+      de caixa / início de tratamento; alerta de vencimento; "medicamento da casa";
+      escolha manual de lote na perda.
 
 **Sessão #10 (2026-07-21) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_10.md`. Três
 ajustes independentes vindos da demonstração à Thais, de baixo/médio risco:
@@ -306,10 +334,11 @@ MVP entra em piloto.
 - [ ] Acompanhar no piloto: a exigência de **ao menos um horário** no cadastro de
       medicamento contínuo (Sessão #10). Se existir caso legítimo de cadastrar
       antes de saber a posologia, é fácil afrouxar
-- [ ] **Sessão própria — rastreamento por lote e validade:** cada entrada de
-      estoque com lote/validade próprios, exibidos também no estoque por
-      residente. Muda o núcleo do ledger (a baixa passa a escolher lote, provável
-      FEFO) e tem decisões de produto pendentes. Levantado na demo à Thais
+- [x] **Rastreamento por lote e validade — FEITO na Sessão #11** (DEC-040..043):
+      cada entrada com lote/validade próprios, exibidos no estoque por residente;
+      baixa por FEFO (validade mais próxima primeiro, varrendo lotes). O ledger
+      virou duas verdades sincronizadas (lotes + `movimentacoes_estoque`).
+      Levantado na demo à Thais
 - [ ] **Guilherme:** revisar RELATORIO_SESSAO_08.md, salvar no Drive, commit + push
 - [ ] Acompanhar no piloto: mudar prescrição no meio do dia versiona (DEC-026) e
       faz o slot novo pedir tratativa naquele mesmo dia — comportamento antigo,
