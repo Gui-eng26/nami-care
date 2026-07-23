@@ -241,6 +241,19 @@ body {
   width: 100%;
 }
 
+/* BUG-004 — o `min-width: 0` acima resolve o rótulo, não o campo de data. No
+   WebKit o input[type="date"] tem largura INTRÍNSECA própria, derivada do
+   formato da data, e não encolhe abaixo dela nem com `width: 100%`: transborda
+   o label e invade o vizinho. Global de propósito — protege os modais de
+   validade do estoque e as datas do FormMedicamento, que continuam lado a
+   lado. */
+input[type='date'] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  width: 100%;
+}
+
 .formulario .campo-opcao {
   flex-direction: row;
   align-items: center;
@@ -930,6 +943,27 @@ body {
   gap: 0.5rem;
 }
 
+/* BUG-005 — no `.atalhos` (flex-wrap, pills de largura intrínseca) os quatro
+   períodos quebravam 3 + 1 a 375px e "Este mês" ficava órfão na segunda linha,
+   com cara de item solto. Grade 2×2: quatro células iguais, sem órfão, em
+   qualquer largura. Classe nova de propósito — `.atalhos` continua servindo à
+   alternância "Contínuo | SOS" (`.subabas`), que são dois botões e não devem
+   virar grade. */
+.atalhos-periodo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+/* Par De/Até empilhado SEMPRE, não abaixo de um breakpoint: resolve a classe
+   inteira do BUG-004 em vez desta ocorrência, e não volta a apertar se a
+   cuidadora usar fonte ampliada no aparelho. */
+.periodo-datas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
 .atalho {
   font: inherit;
   font-size: 0.8125rem;
@@ -992,14 +1026,16 @@ body {
   border-radius: 999px;
 }
 
-.adesao-sos {
-  font-size: 0.875rem;
+/* BUG-006 — o SOS não é categoria (não tem denominador, logo não tem
+   percentual nem barra — DEC-030), mas tinha que ganhar o RITMO das cinco: por
+   parecer prosa, a linha clicável entregue na Sessão #13 passou despercebida
+   até pelo autor do recurso. Divisor separa o bloco da prosa acima; por dentro
+   ele usa `.adesao-linha`, então rótulo, valor e seta caem nas mesmas colunas
+   das categorias. */
+.adesao-sos-bloco {
+  border-top: 1px solid var(--cor-borda);
+  padding-top: 0.75rem;
   margin-top: 0.75rem;
-}
-
-.adesao-sos-nota {
-  font-size: 0.8125rem;
-  color: var(--cor-texto-suave);
 }
 
 .adesao-legenda {

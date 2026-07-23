@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
+import { fmtForma } from '../lib/formato.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
 import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
@@ -487,7 +488,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
                     <span className="item-gestao-nome">
                       {h.hora.slice(0, 5)}
                       <span className="item-gestao-detalhe">
-                        {Number(h.qtd_dose)} {medicamento.forma_farmaceutica || 'unidade(s)'}
+                        {Number(h.qtd_dose)} {fmtForma(h.qtd_dose, medicamento.forma_farmaceutica)}
                       </span>
                     </span>
                     <span className="item-gestao-chips">

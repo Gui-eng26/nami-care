@@ -5,6 +5,50 @@ export function fmtQtd(n) {
   return Number.isInteger(v) ? String(v) : v.toLocaleString('pt-BR')
 }
 
+// Formas que não flexionam: unidades de medida e abreviações. Comparadas em
+// minúsculas.
+const FORMAS_INVARIAVEIS = new Set(['ml', 'mg', 'mcg', 'g', 'kg', 'l', 'ui', 'un', 'un.'])
+
+// Plurais irregulares que as regras abaixo errariam. Mapa pequeno de propósito:
+// cresce por evidência de uso, não por antecipação.
+const FORMAS_EXCECAO = { gel: 'géis' }
+
+const VOGAIS_FINAIS = 'aeiouáâãéêíóôõúy'
+
+// Forma farmacêutica flexionada em número (DEC-050). Devolve SÓ a forma — a
+// quantidade fica com quem chama, para cada tela manter o próprio espaçamento e
+// a própria marcação.
+//
+// `forma_farmaceutica` é texto livre digitado no cadastro: não há lista fechada
+// para consultar. Daí o princípio — diante de uma terminação que as regras não
+// cobrem com segurança, devolve a palavra COMO FOI DIGITADA. "3 gel" é
+// levemente errado; "3 gels" é constrangedor e mina a confiança no app inteiro.
+//
+// Singular quando 0 < n ≤ 1; plural nos demais casos, zero incluído. A dosagem
+// aceita meio comprimido, então "0,5 comprimido" não é caso hipotético.
+export function fmtForma(qtd, forma) {
+  // Sem forma cadastrada a base é 'unidade', que flexiona — é isto que aposenta
+  // o 'unidade(s)' que as telas usavam como fallback.
+  const base = String(forma ?? '').trim() || 'unidade'
+  const n = Number(qtd)
+  if (n > 0 && n <= 1) return base
+
+  const chave = base.toLowerCase()
+  if (FORMAS_INVARIAVEIS.has(chave)) return base
+  if (FORMAS_EXCECAO[chave]) return FORMAS_EXCECAO[chave]
+  // "comprimido revestido" exigiria flexionar as duas palavras com regras
+  // diferentes; não vale o risco.
+  if (base.includes(' ')) return base
+
+  const fim = chave.slice(-1)
+  if (fim === 's' || fim === 'x') return base // 'gotas' já é plural
+  if (chave.endsWith('ão')) return `${base.slice(0, -2)}ões`
+  if (fim === 'm') return `${base.slice(0, -1)}ns`
+  if (fim === 'r' || fim === 'z') return `${base}es`
+  if (VOGAIS_FINAIS.includes(fim)) return `${base}s`
+  return base // terminação não coberta: no escuro, não flexiona
+}
+
 // Rótulo por SUBTIPO do extrato (DEC-036): o ajuste de contagem é entrada ou
 // saída conforme o sinal da quantidade — a distinção mora aqui, não no tipo.
 // Desde a DEC-049 é o ÚNICO rótulo de movimentação do app: a ficha do estoque e

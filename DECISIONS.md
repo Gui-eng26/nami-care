@@ -1325,3 +1325,51 @@ Tudo o mais preservado: subtipo derivado pelo **sinal** da quantidade, filtro
 combinável, `lotes` por movimentação (DEC-043), bloco `medicamento`. Somente
 leitura — nenhuma escrita no ledger, nenhuma mudança de schema. Migration
 `20260723000300_extrato_dono_da_dose`.
+
+## DEC-050 — Flexão de número da forma farmacêutica
+**Data:** 2026-07-23 | **Status:** aprovada (Sessão #14)
+
+**Contexto.** A tela de estoque mostrava **"29 comprimido"**, "11 comprimido",
+"20 comprimido". As telas concatenavam `quantidade + forma_farmaceutica` cru, sem
+flexão nenhuma. O `'unidade(s)'` usado como fallback era o mesmo problema
+disfarçado de solução — e aparecia em seis telas.
+
+**Por que não dá para consultar uma lista.** `forma_farmaceutica` é **texto
+livre**, digitado no cadastro do medicamento (placeholder "ex.: comprimido").
+Não existe catálogo fechado para consultar nem coluna de plural para ler. Valores
+reais já em uso: `comprimido`, `cápsula`. Plausíveis, e todos legítimos: `gotas`,
+`ampola`, `sachê`, `solução`, `xarope`, `adesivo`, `ml`.
+
+Transformar o campo em lista fechada foi **descartado**: mudaria o cadastro, o
+schema e o fluxo de uma casa que ainda não começou o piloto, para resolver um
+defeito de apresentação.
+
+**Regra numérica.** Singular quando `0 < n ≤ 1`; plural nos demais casos, **zero
+incluído**: `0 comprimidos`, `0,5 comprimido`, `1 comprimido`, `1,5 comprimidos`,
+`29 comprimidos`. A dosagem do projeto aceita **meio comprimido**, então o caso
+`0,5` não é hipotético — é o motivo de a regra não ser `n === 1`.
+
+**Princípio: errar para o lado de NÃO flexionar.** Este é o coração da decisão.
+Diante de uma terminação que as regras não cobrem com segurança, o helper devolve
+a palavra **como foi digitada**. A força bruta produziria `solução → soluçãos`,
+`gel → gels`, `gotas → gotass` — pior que o defeito original. **"3 gel" é
+levemente errado; "3 gels" é constrangedor e mina a confiança no app inteiro**,
+inclusive nos números que estão certos. Num app de medicação, a percepção de
+descuido é cara.
+
+**O helper** `fmtForma(qtd, forma)` (`src/lib/formato.js`) devolve **só a forma
+flexionada**, nunca a quantidade — cada tela mantém o controle do próprio
+espaçamento e da própria marcação. Sem forma cadastrada, a base é `'unidade'`,
+que flexiona: é isto que **aposenta o `'unidade(s)'`** de todas as telas.
+
+Ordem das regras, no plural: invariáveis (`ml mg mcg g kg l ui un un.`) → exceções
+conhecidas (`gel → géis`, mapa pequeno e extensível) → **mais de uma palavra**
+("comprimido revestido" exigiria flexionar as duas com regras diferentes; não vale
+o risco) → `s`/`x` (`gotas` já é plural) → `ão → ões` → `m → ns` → `r`/`z` `+es` →
+vogal com ou sem acento, ou `y`, `+s` → **qualquer outra terminação: como está**.
+
+**Aplicado só onde há quantidade** — nove pontos. Onde a forma aparece **sozinha**
+(cabeçalho de ficha, nome do item no catálogo) o singular é o correto e flexionar
+seria um defeito novo: esses cinco pontos ficaram intactos.
+
+**Nada de banco.** Sem migration, sem coluna de plural, sem mexer no cadastro.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, ROTULO_SUBTIPO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
+import { fmtQtd, fmtForma, ROTULO_SUBTIPO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
 import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
 import NovoMedicamento from './NovoMedicamento.jsx'
 
@@ -234,7 +234,7 @@ function ItemEstoque({ item, lotes = [], mostrarResidente = false, onAbrir }) {
         {!item.ativo && <span className="chip chip-inativo"> Inativo</span>}
       </span>
       <span className="dose-medicamento">
-        {fmtQtd(item.saldo)} {item.forma_farmaceutica || 'unidade(s)'} —{' '}
+        {fmtQtd(item.saldo)} {fmtForma(item.saldo, item.forma_farmaceutica)} —{' '}
         <span className={situacao.alerta ? 'estoque-rotulo-alerta' : ''}>{situacao.texto}</span>
         {situacao.alerta && item.sugestao_compra !== null && item.tipo === 'continuo' && (
           <> · comprar {fmtQtd(item.sugestao_compra)}</>
@@ -326,7 +326,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
 
       <p className="estoque-saldo">
         {fmtQtd(item.saldo)}{' '}
-        <span className="estoque-saldo-unidade">{item.forma_farmaceutica || 'unidade(s)'}</span>
+        <span className="estoque-saldo-unidade">{fmtForma(item.saldo, item.forma_farmaceutica)}</span>
       </p>
       <p className={situacao.alerta ? 'estoque-rotulo-alerta' : 'estoque-rotulo'}>
         {situacao.texto}
@@ -349,7 +349,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
                 </span>
                 <span className="lote-detalhe">
                   Vence {dataLocal(l.validade)} · {fmtQtd(l.saldo_atual)}{' '}
-                  {item.forma_farmaceutica || 'un.'}
+                  {fmtForma(l.saldo_atual, item.forma_farmaceutica)}
                 </span>
               </li>
             ))}

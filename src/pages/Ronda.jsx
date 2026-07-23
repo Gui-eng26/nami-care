@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { fmtForma } from '../lib/formato.js'
 import DoseSos from './DoseSos.jsx'
 
 const FUSO = 'America/Sao_Paulo'
@@ -222,7 +223,7 @@ function SlotDeDoses({ grupo, onTratar }) {
           <span className="dose-idoso">{dose.nome_idoso}</span>
           <span className="dose-medicamento">
             {dose.nome_medicamento} {dose.dosagem} — {dose.qtd_dose}{' '}
-            {dose.forma_farmaceutica || 'unidade(s)'}
+            {fmtForma(dose.qtd_dose, dose.forma_farmaceutica)}
           </span>
           <span className="dose-acao">Registrar ›</span>
         </button>
@@ -293,7 +294,7 @@ export function RegistrarDose({ dose, turno, onFechar, onRegistrada }) {
         </h3>
         <p className="modal-medicamento">
           {dose.nome_medicamento} {dose.dosagem} — {dose.qtd_dose}{' '}
-          {dose.forma_farmaceutica || 'unidade(s)'}
+          {fmtForma(dose.qtd_dose, dose.forma_farmaceutica)}
         </p>
         <div className="opcoes-tratativa">
           {opcoes.map((opcao) => (

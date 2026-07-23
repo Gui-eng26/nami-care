@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd } from '../lib/formato.js'
+import { fmtQtd, fmtForma } from '../lib/formato.js'
 
 // Dose avulsa SOS/PRN — reestruturada na Sessão #12 (DEC-047).
 //
@@ -155,7 +155,7 @@ export default function DoseSos({ onFechar, onRegistrada }) {
                     {i.idoso_da_casa && <span className="chip chip-casa"> Da casa</span>}
                     <span className="item-gestao-detalhe">
                       {' '}
-                      — estoque: {fmtQtd(i.saldo)} {i.forma_farmaceutica || 'unidade(s)'}
+                      — estoque: {fmtQtd(i.saldo)} {fmtForma(i.saldo, i.forma_farmaceutica)}
                     </span>
                   </button>
                 ))}

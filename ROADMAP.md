@@ -420,6 +420,67 @@ tornou obrigatória.
 
 ---
 
+## Sessão 14 — Ajustes visuais de go-live ✅ (2026-07-23)
+
+Sessão **inteiramente de CSS e apresentação**, nascida do teste que o Guilherme
+fez no aparelho logo após a Sessão #13: quatro defeitos visuais, nenhum de dados
+nem de regra de negócio. **Nenhuma migration, nenhuma RPC, nenhuma consulta,
+nenhuma escrita, nenhuma mudança de schema.** Decisão nova: **DEC-050**.
+
+- **BUG-004 — `input[type="date"]` estoura o contêiner no WebKit.** No iOS o
+  campo tem **largura intrínseca própria**, derivada do formato da data, e não
+  encolhe abaixo dela nem com `width: 100%`. O `min-width: 0` que existia vivia
+  só no `<label>`; o input por dentro transbordava e invadia o vizinho. Visível
+  na Adesão a 375px; **latente** no Extrato de movimentações, nos modais de
+  validade do Estoque e nas datas do `FormMedicamento`. Corrigido com regra
+  **global** em `input[type="date"]` (`appearance: none`, `min-width: 0`,
+  `width: 100%`), que cobre as quatro telas de uma vez, mais a nova
+  `.periodo-datas`, que empilha "De" e "Até" **sempre** — não abaixo de um
+  breakpoint: resolve a classe do bug em vez da ocorrência, e não volta a apertar
+  se a cuidadora usar fonte ampliada.
+- **BUG-005 — atalhos de período órfãos.** Em `.atalhos` (flex-wrap, pills de
+  largura intrínseca) os quatro períodos quebravam 3 + 1 a 375px e "Este mês"
+  sobrava sozinho na segunda linha, com cara de item solto em vez de quarta
+  opção do grupo. Nova `.atalhos-periodo` em **grade 2×2**. `.atalhos` e
+  `.subabas` ficaram intactas — a alternância "Contínuo | SOS" reaproveita
+  `.atalhos` e são dois botões, não uma grade.
+- **BUG-006 — linha de doses SOS sem afordância de clique.** O recurso foi
+  entregue na Sessão #13 e funcionava; a linha é que continuou parecendo rodapé
+  (vinha depois da prosa explicativa, com o `›` no meio de uma frase e tamanho de
+  legenda). **O efeito observado é o registro mais útil desta sessão: o próprio
+  autor do recurso, testando no aparelho, quase concluiu que a Sessão #13 não o
+  tinha entregue.** Um recurso que ninguém descobre é, na prática, um recurso que
+  não existe — e isso vale dobrado para as cuidadoras, que não sabem o que
+  procurar. O SOS ganhou **bloco próprio** com divisor, usando o mesmo
+  `.adesao-linha` das cinco categorias: rótulo à esquerda, número à direita onde
+  os olhos já procuram o percentual, seta na mesma coluna. A explicação saiu de
+  dentro da área clicável e virou legenda. O aviso de pendentes **desceu para o
+  fim** do card. As setas das outras cinco **não** mudaram: o problema era o SOS,
+  não a afordância geral da tela.
+- **BUG-007 — forma farmacêutica sem flexão de número** ("29 comprimido"), mais
+  o `'unidade(s)'` que era o mesmo defeito disfarçado de solução. Resolvido pelo
+  helper `fmtForma` (**DEC-050**), aplicado nos nove pontos que concatenam
+  quantidade + forma e deliberadamente **fora** dos cinco onde a forma aparece
+  sozinha. `'unidade(s)'` não existe mais no `src/`.
+
+**Achado de passagem, corrigido:** em `ExtratoMovimentacoes.jsx` o bloco de
+De/Até estava **fora** de um `.formulario`, então aqueles inputs não recebiam
+padding nem borda — a tela "não estourava" por acidente, não por desenho. As duas
+telas de período passam a ter o mesmo tratamento visual.
+
+Conferido no navegador a 375px e a 320px ponta a ponta (Adesão, Extrato, modais
+de compra e de ajuste, `FormMedicamento`), sem rolagem horizontal em nenhum;
+clique do SOS reaberto e intacto; bateria do helper em Node com 10 formas × 5
+quantidades; build OK; console sem erros. **Seed não resetado — nada de dados
+mudou.** `git status` confirma `supabase/migrations/` intocado.
+
+**Achado registrado, não corrigido:** nos prints do aparelho a barra de status do
+iPhone aparece sobre as abas. As `.abas` não são `sticky`, então é provável que
+seja artefato da moldura do print sobre uma captura já rolada — não foi
+reproduzido no navegador. Fica para uma eventual sessão de `safe-area`.
+
+---
+
 ## Fora de escopo do MVP (backlog pós-piloto)
 
 - **Alerta de alergia** (Sessão #12 levantou, #13 encaminhou): a observação do

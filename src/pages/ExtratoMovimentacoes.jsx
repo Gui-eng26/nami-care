@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, ROTULO_SUBTIPO, dataHoraLocal, resumoLotesMov } from '../lib/formato.js'
+import { fmtQtd, fmtForma, ROTULO_SUBTIPO, dataHoraLocal, resumoLotesMov } from '../lib/formato.js'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -72,7 +72,7 @@ export default function ExtratoMovimentacoes() {
   return (
     <section className="secao">
       <div className="card">
-        <div className="atalhos">
+        <div className="atalhos-periodo">
           {ATALHOS.map((a) => (
             <button
               key={a.id}
@@ -84,25 +84,30 @@ export default function ExtratoMovimentacoes() {
             </button>
           ))}
         </div>
-        <div className="formulario-linha">
-          <label>
-            De
-            <input
-              type="date"
-              value={periodo.inicio}
-              max={diaLocal()}
-              onChange={(e) => mudarData('inicio', e.target.value)}
-            />
-          </label>
-          <label>
-            Até
-            <input
-              type="date"
-              value={periodo.fim}
-              max={diaLocal()}
-              onChange={(e) => mudarData('fim', e.target.value)}
-            />
-          </label>
+        {/* O `.formulario` em volta não é decoração: sem ele estes inputs não
+            recebiam borda nem padding — divergiam da Adesão por acidente de
+            herança, não por desenho. */}
+        <div className="formulario">
+          <div className="periodo-datas">
+            <label>
+              De
+              <input
+                type="date"
+                value={periodo.inicio}
+                max={diaLocal()}
+                onChange={(e) => mudarData('inicio', e.target.value)}
+              />
+            </label>
+            <label>
+              Até
+              <input
+                type="date"
+                value={periodo.fim}
+                max={diaLocal()}
+                onChange={(e) => mudarData('fim', e.target.value)}
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -252,7 +257,7 @@ function ItemConsolidado({ item, expandido, onAlternar, onAbrir }) {
                     {!r.item_ativo && <span className="chip chip-inativo"> Inativo</span>}
                   </span>
                   <span className="dose-medicamento">
-                    {fmtQtd(r.saldo)} {item.forma_farmaceutica || 'unidade(s)'} —{' '}
+                    {fmtQtd(r.saldo)} {fmtForma(r.saldo, item.forma_farmaceutica)} —{' '}
                     <span className={s.alerta ? 'estoque-rotulo-alerta' : ''}>{s.texto}</span>
                   </span>
                   <span className="dose-acao">›</span>

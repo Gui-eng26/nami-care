@@ -1,13 +1,62 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-23 (fim da Sessão #13)
+> Última atualização: 2026-07-23 (fim da Sessão #14)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #14 (2026-07-23) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_14.md`. Nasceu do
+teste que o Guilherme fez no aparelho logo após a Sessão #13: **quatro defeitos
+visuais** — três de layout, um de texto. Nenhum de dados nem de regra de negócio.
+Sessão **inteiramente de CSS e apresentação**: nenhuma migration, nenhuma RPC,
+nenhuma consulta, nenhuma escrita, nenhuma mudança de schema. Decisão **DEC-050**;
+**BUG-004 a BUG-007**. **Seed não resetado — nada de dados mudou.**
+- [x] **BUG-004 — campo de data estourando o contêiner.** Não era `box-sizing`
+      (o reset global já estava certo): no WebKit o `input[type="date"]` tem
+      **largura intrínseca própria** e não encolhe abaixo dela nem com
+      `width: 100%`; o `min-width: 0` existente vivia só no `<label>`. Visível na
+      Adesão a 375px e **latente** em mais quatro lugares (Extrato, modais de
+      validade do Estoque, `FormMedicamento`). Corrigido com **regra global** em
+      `input[type="date"]` + nova `.periodo-datas`, que empilha "De" e "Até"
+      **sempre**, não abaixo de um breakpoint — resolve a classe do bug e não
+      volta a apertar com fonte ampliada
+- [x] **BUG-005 — atalhos de período órfãos.** "Este mês" sobrava sozinho na
+      segunda linha a 375px. Nova `.atalhos-periodo` em **grade 2×2**;
+      `.atalhos` e `.subabas` **intactas** (a alternância "Contínuo | SOS"
+      reaproveita `.atalhos` e são dois botões, não uma grade)
+- [x] **BUG-006 — doses SOS sem afordância de clique.** O recurso da Sessão #13
+      funcionava; a linha é que parecia rodapé. **O efeito observado é o registro
+      mais útil da sessão: o próprio autor do recurso quase concluiu que ele não
+      tinha sido entregue.** Recurso que ninguém descobre é recurso que não
+      existe — e vale dobrado para as cuidadoras, que não sabem o que procurar.
+      O SOS ganhou **bloco próprio com divisor**, no mesmo `.adesao-linha` das
+      cinco categorias (seta na mesma coluna); a explicação saiu da área
+      clicável; o aviso de pendentes **desceu para o fim** do card. As setas das
+      outras cinco **não** mudaram
+- [x] **BUG-007 / DEC-050 — flexão da forma farmacêutica.** "29 comprimido" e o
+      `'unidade(s)'`, que era o mesmo defeito disfarçado de solução. Helper
+      `fmtForma(qtd, forma)`, com o princípio **errar para o lado de não
+      flexionar**: terminação não coberta com segurança devolve a palavra como
+      foi digitada, porque `soluçãos`/`gels`/`gotass` seriam piores que o defeito
+      original. Singular só quando `0 < n ≤ 1` (meio comprimido existe).
+      Aplicado nos **nove** pontos com quantidade; os **cinco** onde a forma
+      aparece sozinha ficaram intactos. `'unidade(s)'` não existe mais no `src/`
+- [x] **Achado de passagem, corrigido:** o De/Até do Extrato estava **fora** de um
+      `.formulario` e não recebia borda nem padding — a tela "não estourava" por
+      acidente, não por desenho. As duas telas de período agora têm o mesmo
+      tratamento visual (uniformização consciente, não regressão)
+- [x] Conferido a **375px e a 320px** ponta a ponta (Adesão, Extrato, modais de
+      compra e de ajuste, `FormMedicamento`), sem rolagem horizontal em nenhum;
+      clique do SOS reaberto e intacto; bateria do helper em Node (10 formas × 5
+      quantidades); build OK; console sem erros; `supabase/migrations/` intocado
+- [ ] **Achado registrado, NÃO corrigido:** nos prints do aparelho a barra de
+      status do iPhone aparece sobre as abas. As `.abas` não são `sticky` e não
+      se reproduziu no navegador — provável artefato da moldura do print sobre
+      uma captura já rolada. Fica para uma eventual sessão de `safe-area`
 
 **Sessão #13 (2026-07-23) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_13.md`. Nasceu do
 teste de usabilidade que o Guilherme fez logo após a Sessão #12: ele registrou uma

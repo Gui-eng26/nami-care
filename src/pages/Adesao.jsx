@@ -132,7 +132,7 @@ export default function Adesao() {
       <section className="secao">
         <h2>Adesão à medicação</h2>
         <div className="card">
-          <div className="atalhos">
+          <div className="atalhos-periodo">
             {ATALHOS.map((a) => (
               <button
                 key={a.id}
@@ -145,7 +145,7 @@ export default function Adesao() {
             ))}
           </div>
           <div className="formulario">
-            <div className="formulario-linha">
+            <div className="periodo-datas">
               <label>
                 De
                 <input
@@ -287,35 +287,47 @@ function ResultadoAdesao({ dados, rotuloPeriodo, temResidente, onAbrir }) {
         </p>
       )}
 
+      {/* SOS em bloco próprio, com o mesmo layout de linha das categorias
+          (BUG-006): rótulo à esquerda, número à direita onde os olhos já
+          procuram o percentual, seta na mesma coluna das outras cinco. Não vira
+          categoria porque não tem denominador — logo, sem percentual e sem
+          barra (DEC-030). Sem residente o bloco continua aparecendo: some
+          apenas a seta e o clique (DEC-048). */}
+      <div className="adesao-sos-bloco">
+        {temResidente ? (
+          <button type="button" className="adesao-categoria" onClick={() => onAbrir('sos')}>
+            <LinhaSos qtd={dados.sos} comSeta />
+          </button>
+        ) : (
+          <LinhaSos qtd={dados.sos} />
+        )}
+        {/* Fora da área clicável: é explicação, não alvo de toque. */}
+        <p className="adesao-legenda">
+          Contagem à parte — dose avulsa não tem horário planejado e fica fora dos
+          percentuais.
+        </p>
+      </div>
+
+      {/* Por último de propósito: alerta acionável fecha o card, onde tem mais
+          chance de ser lido e lembrado. */}
       {pendentes > 0 && (
         <p className="aviso aviso-alerta">
           {fmtQtd(pendentes)} dose{pendentes > 1 ? 's' : ''} do turno aberto ainda sem
           tratativa — fora dos percentuais até {pendentes > 1 ? 'serem registradas' : 'ser registrada'}.
         </p>
       )}
+    </div>
+  )
+}
 
-      {temResidente ? (
-        <button type="button" className="adesao-categoria" onClick={() => onAbrir('sos')}>
-          <p className="adesao-sos">
-            Doses SOS no período: <strong>{fmtQtd(dados.sos)}</strong>
-            <span className="adesao-seta"> ›</span>
-            <span className="adesao-sos-nota">
-              {' '}
-              — contagem à parte; dose avulsa não tem horário planejado e fica fora dos
-              percentuais.
-            </span>
-          </p>
-        </button>
-      ) : (
-        <p className="adesao-sos">
-          Doses SOS no período: <strong>{fmtQtd(dados.sos)}</strong>
-          <span className="adesao-sos-nota">
-            {' '}
-            — contagem à parte; dose avulsa não tem horário planejado e fica fora dos
-            percentuais.
-          </span>
-        </p>
-      )}
+function LinhaSos({ qtd, comSeta = false }) {
+  return (
+    <div className="adesao-linha">
+      <span>Doses SOS no período</span>
+      <span className="adesao-pct">
+        {fmtQtd(qtd)}
+        {comSeta && <span className="adesao-seta"> ›</span>}
+      </span>
     </div>
   )
 }

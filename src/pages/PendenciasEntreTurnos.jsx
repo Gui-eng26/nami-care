@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
+import { fmtForma } from '../lib/formato.js'
 import { RegistrarDose, horaLocal } from './Ronda.jsx'
 import TecladoPin from '../components/TecladoPin.jsx'
 
@@ -145,7 +146,7 @@ export default function PendenciasEntreTurnos({ turno, onMudanca }) {
                   <span className="dose-idoso">{horaLocal(dose.prevista_em)}</span>
                   <span className="dose-medicamento">
                     {dose.nome_medicamento} {dose.dosagem} — {dose.qtd_dose}{' '}
-                    {dose.forma_farmaceutica || 'unidade(s)'}
+                    {fmtForma(dose.qtd_dose, dose.forma_farmaceutica)}
                   </span>
                   <span className="dose-acao">Registrar ›</span>
                 </button>
