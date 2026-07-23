@@ -33,6 +33,7 @@ const supabase = createClient(url, serviceKey, {
 // Ordem inversa das dependências (FKs) — a mesma do seed.
 const TABELAS = [
   'movimentacoes_estoque',
+  'lotes_estoque',
   'administracoes',
   'horarios',
   'medicamentos',
