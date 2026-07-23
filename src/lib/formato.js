@@ -5,15 +5,12 @@ export function fmtQtd(n) {
   return Number.isInteger(v) ? String(v) : v.toLocaleString('pt-BR')
 }
 
-export const ROTULO_MOVIMENTACAO = {
-  entrada_compra: 'Compra',
-  saida_administracao: 'Dose administrada',
-  ajuste_contagem: 'Ajuste de contagem',
-  perda: 'Perda'
-}
-
 // Rótulo por SUBTIPO do extrato (DEC-036): o ajuste de contagem é entrada ou
 // saída conforme o sinal da quantidade — a distinção mora aqui, não no tipo.
+// Desde a DEC-049 é o ÚNICO rótulo de movimentação do app: a ficha do estoque e
+// a aba de extrato leem o mesmo `subtipo` da mesma RPC. O antigo
+// `ROTULO_MOVIMENTACAO`, que rotulava por `tipo` e dizia "Ajuste de contagem"
+// onde esta tabela diz "(a menos)", foi removido junto com o caminho que o usava.
 export const ROTULO_SUBTIPO = {
   compra: 'Compra',
   dose: 'Dose administrada',
@@ -26,6 +23,17 @@ export function dataHoraLocal(iso) {
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  })
+}
+
+// Só a hora ('08:00'), para o par previsto × registrado do extrato de adesão
+// (DEC-048), onde o dia já vem dito na primeira metade da linha.
+export function horaLocal(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'America/Sao_Paulo'

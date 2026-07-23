@@ -41,6 +41,10 @@ const MENSAGENS = {
   motivo_obrigatorio: 'Informe o motivo da perda.',
   estoque_minimo_invalido: 'O estoque mínimo deve ser zero ou mais, em passos de 0,5.',
   periodo_invalido: 'Período inválido: a data final vem antes da inicial.',
+  // Extrato de adesão por categoria (Sessão #13 — DEC-048). Os dois só
+  // aparecem se a tela chamar errado; a cuidadora não chega neles pelo uso.
+  residente_obrigatorio: 'Escolha um residente para ver as doses.',
+  categoria_invalida: 'Categoria desconhecida. Recarregue a tela.',
   turno_nao_encontrado: 'Turno não encontrado. Recarregue a tela.',
   turno_ja_fechado: 'Este turno já foi encerrado. Recarregue a tela.'
 }

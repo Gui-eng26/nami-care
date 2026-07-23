@@ -47,6 +47,15 @@ const TRATADA_ATE = -50
 // 5 dias da DEC-033).
 const DIA_DA_LACUNA = 3
 
+// Validade da reposição do cenário: 10 meses à frente, no mesmo espírito do
+// `validadeSeed` do seed base (lotes com datas plausíveis, longe do alerta).
+function validadeDemo() {
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: FUSO_CASA })
+  const d = new Date(`${hoje}T12:00:00`)
+  d.setMonth(d.getMonth() + 10)
+  return d.toLocaleDateString('en-CA')
+}
+
 function criarRandom(semente) {
   let a = semente
   return function () {
@@ -202,6 +211,9 @@ export async function gerarDemo(supabase, falhar) {
           {
             p_medicamento_id: m.id,
             p_quantidade: 120,
+            // Validade passou a ser obrigatória na DEC-041 (Sessão #11); esta
+            // chamada ficou para trás e quebrava o reset do cenário de demo.
+            p_validade: validadeDemo(),
             p_observacao: 'Reposição (cenário de demonstração)'
           },
           `demo: reforçar estoque de ${m.nome}`

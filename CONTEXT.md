@@ -1,13 +1,63 @@
 # CONTEXT — Nami Care
 
 > Estado atual do projeto para continuidade entre sessões (Claude.ai e Claude Code).
-> Última atualização: 2026-07-22 (fim da Sessão #12)
+> Última atualização: 2026-07-23 (fim da Sessão #13)
 
 ## Onde estamos
 
 **Fase atual:** Fase 4 — Go-live. **App no ar em
 https://nami-care-production.up.railway.app**; o piloto ainda não começou
 (falta o banco de produção receber os dados reais).
+
+**Sessão #13 (2026-07-23) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_13.md`. Nasceu do
+teste de usabilidade que o Guilherme fez logo após a Sessão #12: ele registrou uma
+dose SOS de dipirona **da casa** para a Alzira, o dado foi gravado certo — e
+**nenhuma tela mostrava que tinha sido a Alzira**. Buraco de visibilidade, não de
+dados: **nada de schema mudou**, nenhuma escrita, nenhuma linha do ledger alterada.
+Sessão inteiramente de leitura e apresentação. Decisões **DEC-048/049**; 3
+migrations novas (`20260723000100..000300`).
+- [x] **Fonte única (DEC-048):** nasce `fn_doses_adesao` — uma linha por
+      administração no período, com dono resolvido, categoria e a **regra de
+      período assimétrica** (agendada por `prevista_em`, SOS por `registrado_em`)
+      num lugar só. `relatorio_adesao` passa a **contar em cima dela** e o detalhe
+      é a **mesma função filtrada**: por construção não há como listar diferente
+      do que se conta. O risco evitado era um segundo `where` divergindo da tela.
+      `pendentes` fica FORA (doses sem linha em `administracoes`).
+      **Refactor puro provado:** jsonb inteiro idêntico antes × depois, casa e
+      cada residente, 3 períodos — **39 comparações, 0 divergências**
+- [x] **Extrato de adesão (DEC-048):** com residente escolhido, as 5 categorias +
+      a linha de SOS viram botão e abrem a lista das doses (medicamento, dia/hora,
+      qtd, cuidadora; atrasada mostra **previsto × registrado**; SOS leva chip
+      "Da casa"). Só por residente — na visão da casa nada é clicável. Teto de
+      **200 linhas** com aviso explícito de corte. Nenhuma categoria nova
+- [x] **Ledger unificado (DEC-049):** a ficha do estoque lia a tabela **direto**
+      (rotulando por `tipo`) e a aba de extrato lia pela **RPC** (rotulando por
+      `subtipo`) — "Ajuste de contagem" numa tela, "(a menos)" na outra. A ficha
+      passou a consumir `extrato_medicamento`, que ganhou **período opcional**
+      (nulos = últimas 50; um só nulo = `periodo_invalido`). `ROTULO_MOVIMENTACAO`
+      removido. Campo novo **`residente`** só em baixa por dose de medicamento da
+      casa: `Cuidadora: … · Residente: …`
+- [x] Bateria SQL em `begin/rollback` com **20 casos, 20 verdes** (SOS da casa,
+      SOS próprio, agendada, `pendente`, residente sem dose, invariante das 6
+      categorias, 4 validações de argumento); invariante
+      `detalhe.total == relatorio.qtd` em **216 combinações, 0 divergências**;
+      build OK; advisors sem nada novo em espécie
+- [x] **Conferência a 375px ponta a ponta:** as 6 listas da Alzira coerentes
+      (20+1+1+1+0 = 23 = total planejadas), a dipirona **da casa** com chip na
+      lista de SOS dela, nada clicável em "Toda a casa", ficha da dipirona com
+      `Residente: Alzira Nogueira` e ficha de medicamento próprio sem residente,
+      ficha × aba de extrato com **as mesmas linhas, rótulos e lotes**
+- [x] **Ponto de risco conferido de propósito:** ronda registrando dose agendada e
+      fluxo SOS (residente → medicamento → quantidade) **exercitados na tela** —
+      ambos intactos
+- [x] **Achado de passagem, corrigido:** `npm run seed-demo` estava **quebrado
+      desde a Sessão #11** — `seed-demo.js` chamava `registrar_entrada_estoque`
+      sem `p_validade`, obrigatória desde a DEC-041. Corrigido; seed resetado ao
+      final e cenário de demonstração recomposto. **Nada do go-live tocado**
+- [ ] **Backlog de features futuras (decisão do Guilherme, NÃO bloqueia o
+      go-live):** alerta de alergia — a observação do residente (texto livre) não
+      vira aviso no passo de escolha do medicamento. Sai da lista de itens em
+      aberto do MVP
 
 **Sessão #12 (2026-07-22) — CONCLUÍDA.** Ver `RELATORIO_SESSAO_12.md`. Último
 item estrutural do backlog da Thais: **medicamento da casa** (SOS compartilhado)
@@ -45,10 +95,11 @@ migrations novas (`20260722000500..000900`).
       próprio inalterado, e **ronda agendada registrando normalmente** — o ponto
       de risco da política de INSERT nova. Um ajuste saiu daí: "(DEC-044)" havia
       vazado para a tela da cuidadora e foi removido.
-- [ ] **Levantado na conferência, para conversar com a Thais:** a observação de
-      alergia do residente (texto livre) não vira alerta no passo de escolha do
-      medicamento — a dipirona da casa aparece para quem tem alergia registrada.
-      O estoque compartilhado não criou o problema, só o tornou mais visível.
+- [x] **Levantado na conferência:** a observação de alergia do residente (texto
+      livre) não vira alerta no passo de escolha do medicamento — a dipirona da
+      casa aparece para quem tem alergia registrada. O estoque compartilhado não
+      criou o problema, só o tornou mais visível. **Encaminhado na Sessão #13:
+      vira feature futura do backlog, explicitamente NÃO bloqueante do go-live.**
 - [ ] **Fora de escopo, aguardando sessão própria:** categoria "agudo"; abertura
       de caixa / início de tratamento; alerta de vencimento; escolha manual de
       lote na perda; medicamento da casa contínuo (decidido não existir);
@@ -372,7 +423,7 @@ MVP entra em piloto.
       cadastro de medicamento agora tem estoque inicial embutido (compra ou
       remanescente) e atalho dentro da aba Estoque — a viagem separada à aba
       para lançar a primeira entrada deixou de ser necessária
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_10.md, salvar no Drive, commit + push
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_10.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
 - [ ] Acompanhar no piloto: se **60 min** (DEC-039) é a tolerância certa. Agora
       que o vermelho é mais raro, ele deve voltar a significar alguma coisa;
       eventual reajuste deve vir de uso observado, não de suposição
@@ -384,7 +435,7 @@ MVP entra em piloto.
       baixa por FEFO (validade mais próxima primeiro, varrendo lotes). O ledger
       virou duas verdades sincronizadas (lotes + `movimentacoes_estoque`).
       Levantado na demo à Thais
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_08.md, salvar no Drive, commit + push
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_08.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
 - [ ] Acompanhar no piloto: mudar prescrição no meio do dia versiona (DEC-026) e
       faz o slot novo pedir tratativa naquele mesmo dia — comportamento antigo,
       mas que ficará muito mais visível agora que a edição é da cuidadora do
@@ -397,10 +448,10 @@ MVP entra em piloto.
       daria traço mais limpo). Trocar o arquivo e rodar `npm run icones`
 - [ ] Usar o logo horizontal completo no cabeçalho / tela de login — não coube
       na Sessão #7 (que não podia mexer em tela); sessão futura
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_07.md, salvar no Drive, commit + push
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_06.md, salvar no Drive, commit + push
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_05_5.md, salvar no Drive, commit + push
-- [ ] **Guilherme:** revisar RELATORIO_SESSAO_05.md, salvar no Drive, commit + push
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_07.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_06.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_05_5.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
+- [x] ~~Guilherme: revisar RELATORIO_SESSAO_05.md, salvar no Drive, commit + push~~ — feito (relatório revisado, commitado e empurrado)
 - [ ] **Guilherme:** teste funcional com `npm run seed -- --com-historico`
       **antes** do passo 5 do runbook (`npm run limpar-banco`) — depois da
       limpeza não há mais base de teste
@@ -431,6 +482,15 @@ MVP entra em piloto.
 3. Backlog registrado: acuracidade de estoque (extrato de movimentações por
    período — candidata a sessão própria); motivo de recusa agregado por
    medicamento (ideia futura)
+4. **Backlog de features futuras — nenhuma bloqueia o go-live:**
+   - **Alerta de alergia** (levantado na Sessão #12, encaminhado na #13 por
+     decisão do Guilherme): a observação do residente é texto livre e não vira
+     aviso no passo de escolha do medicamento. Vira feature quando houver
+     estrutura para "a que o residente é alérgico" — texto livre não dá para
+     comparar com segurança, e alerta que erra é pior que alerta nenhum.
+     **Conversar com a Thais quando o piloto estiver rodando, não antes**
+   - Categoria "agudo"; abertura de caixa / início de tratamento; alerta de
+     vencimento; escolha manual de lote na perda; múltiplas casas/setores
 
 ## Convenções deste projeto
 

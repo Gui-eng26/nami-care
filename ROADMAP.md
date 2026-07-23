@@ -371,8 +371,9 @@ próprio inalterado e **ronda agendada registrando normalmente**); build OK; see
 resetado criando o "Da Casa" com 3 SOS; advisors sem nada novo em espécie.
 **Nada do go-live foi tocado.**
 
-**Levantado na conferência, para a Thais decidir:** a observação de alergia do
-residente não vira alerta no passo de escolha do medicamento SOS.
+**Levantado na conferência:** a observação de alergia do residente não vira alerta
+no passo de escolha do medicamento SOS. *(Encaminhado na Sessão #13: vira feature
+futura do backlog, NÃO bloqueante do go-live.)*
 
 **Fora de escopo, aguardando sessão própria:** categoria "agudo"; abertura de
 caixa / início de tratamento; alerta de vencimento; escolha manual de lote na
@@ -381,8 +382,51 @@ casas/setores.
 
 ---
 
+## Sessão 13 — Ver quem tomou: extrato de adesão e dono da dose ✅ (2026-07-23)
+
+Veio do teste de usabilidade logo após a Sessão #12: a dose SOS de dipirona **da
+casa** dada à Alzira ficou gravada certo, mas **nenhuma tela mostrava que tinha
+sido ela**. O relatório de adesão só devolvia agregados — dava para saber que
+houve 3 não tomadas, nunca *quais*. **Buraco de visibilidade, não de dados:**
+nenhuma coluna nova, nenhum trigger, nenhuma escrita. Sessão inteiramente de
+leitura e apresentação.
+
+- **Fonte única (DEC-048):** `fn_doses_adesao` passa a ser a única definição de
+  "quais doses compõem a adesão" — inclusive a **regra de período assimétrica**
+  (agendada por `prevista_em`, SOS por `registrado_em`) e o dono resolvido.
+  `relatorio_adesao` conta em cima dela; o detalhe é a mesma função filtrada.
+  Evita o risco real: um segundo `where` divergindo e a tela dizendo "4" e
+  listando 3. Mesmo padrão de `doses_do_turno` na ronda. Refactor provado com o
+  jsonb inteiro idêntico antes × depois (39 comparações, 0 divergências).
+- **Extrato de adesão (DEC-048):** com residente escolhido, as 5 categorias + a
+  linha de SOS abrem a lista das doses. Só por residente; teto de 200 com aviso
+  de corte; atrasada mostra previsto × registrado; SOS leva chip "Da casa".
+  Nenhuma categoria nova, nenhum cálculo no cliente.
+- **Ledger unificado (DEC-049):** a ficha do estoque lia a tabela direto
+  (rótulo por `tipo`) e a aba de extrato lia pela RPC (rótulo por `subtipo`) —
+  divergência real de rótulo. A ficha passou a consumir `extrato_medicamento`,
+  que ganhou período opcional (nulos = últimas 50). Campo `residente` só em baixa
+  por dose de medicamento da casa: `Cuidadora: … · Residente: …`.
+
+Bateria SQL em rollback (20 casos, 20 verdes); invariante
+`detalhe.total == relatorio.qtd` em 216 combinações, 0 divergências; conferência
+a 375px ponta a ponta, incluindo o ponto de risco (ronda agendada e fluxo SOS
+exercitados na tela, ambos intactos); build OK; advisors sem nada novo em
+espécie; seed resetado. **Nada do go-live foi tocado.**
+
+**Achado de passagem, corrigido:** `npm run seed-demo` estava quebrado desde a
+Sessão #11 — chamava `registrar_entrada_estoque` sem a `p_validade` que a DEC-041
+tornou obrigatória.
+
+---
+
 ## Fora de escopo do MVP (backlog pós-piloto)
 
+- **Alerta de alergia** (Sessão #12 levantou, #13 encaminhou): a observação do
+  residente é texto livre e não vira aviso na escolha do medicamento. Depende de
+  estrutura para "a que o residente é alérgico" — texto livre não dá para
+  comparar com segurança. **Não bloqueia o go-live**; conversar com a Thais com o
+  piloto já rodando.
 - Motivo de recusa agregado por medicamento (registrada na Sessão #5).
 - Relatórios/exportação para família ou vigilância sanitária.
 - Multi-casa (hoje: 1 casa, 1 usuário Supabase, PIN por cuidadora —

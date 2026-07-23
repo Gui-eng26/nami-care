@@ -1008,6 +1008,31 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Categoria clicável (DEC-048): abre o extrato das doses que formam o número.
+   Só existe na visão por residente — na visão da casa a linha continua um
+   <div> estático, sem afordância nenhuma. O botão não muda a aparência da
+   linha; a seta é o único sinal de que dá para entrar. */
+.adesao-categoria {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.adesao-categoria:active .adesao-linha {
+  opacity: 0.6;
+}
+
+.adesao-seta {
+  color: var(--cor-texto-suave);
+  font-weight: 400;
+}
+
 /* ---- pendências entre turnos (Sessão #5.5) ---- */
 
 /* Deixou de ser aba na Sessão #8: virou faixa de alerta acima das abas, que só

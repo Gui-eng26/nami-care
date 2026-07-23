@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, ROTULO_MOVIMENTACAO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
+import { fmtQtd, ROTULO_SUBTIPO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
 import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
 import NovoMedicamento from './NovoMedicamento.jsx'
 
@@ -268,16 +268,19 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
   const [modal, setModal] = useState(null) // 'entrada' | 'ajuste' | 'perda'
   const [aviso, setAviso] = useState(null)
 
+  // Uma leitura só do ledger (DEC-049): a ficha consome a MESMA RPC da aba
+  // "Extrato de movimentações", com período nulo = últimas 50, que é o que ela
+  // sempre mostrou. Antes lia a tabela direto e rotulava por `tipo`, dizendo
+  // "Ajuste de contagem" onde a outra tela dizia "(a menos)". E é a RPC que
+  // resolve, no banco, quem tomou a dose do medicamento da casa.
   const carregarExtrato = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('movimentacoes_estoque')
-      .select(
-        'id, tipo, quantidade, motivo, criado_em, cuidadores (nome), movimentacao_lote (quantidade, lotes_estoque (lote, validade))'
-      )
-      .eq('medicamento_id', item.medicamento_id)
-      .order('criado_em', { ascending: false })
-      .limit(50)
-    setExtrato(error ? [] : data)
+    const { data, error } = await supabase.rpc('extrato_medicamento', {
+      p_medicamento_id: item.medicamento_id,
+      p_inicio: null,
+      p_fim: null,
+      p_subtipos: null
+    })
+    setExtrato(error || !data.ok ? [] : data.movimentacoes)
   }, [item.medicamento_id])
 
   useEffect(() => {
@@ -382,20 +385,15 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       ) : (
         <ul className="lista-extrato">
           {extrato.map((mov) => {
-            const resumoLotes = resumoLotesMov(
-              (mov.movimentacao_lote ?? []).map((ml) => ({
-                lote: ml.lotes_estoque?.lote,
-                validade: ml.lotes_estoque?.validade,
-                quantidade: ml.quantidade
-              }))
-            )
+            const resumoLotes = resumoLotesMov(mov.lotes)
             return (
             <li key={mov.id} className="extrato-linha">
               <span className="extrato-info">
-                <span className="extrato-tipo">{ROTULO_MOVIMENTACAO[mov.tipo]}</span>
+                <span className="extrato-tipo">{ROTULO_SUBTIPO[mov.subtipo]}</span>
                 <span className="extrato-detalhe">
                   {dataHoraLocal(mov.criado_em)}
-                  {mov.cuidadores ? ` — ${mov.cuidadores.nome}` : ''}
+                  {mov.cuidador ? ` — Cuidadora: ${mov.cuidador}` : ''}
+                  {mov.residente ? ` · Residente: ${mov.residente}` : ''}
                 </span>
                 {mov.motivo && <span className="extrato-detalhe">{mov.motivo}</span>}
                 {resumoLotes && <span className="extrato-detalhe extrato-lote">Lote: {resumoLotes}</span>}

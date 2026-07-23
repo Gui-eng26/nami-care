@@ -368,9 +368,13 @@ function ExtratoDetalhe({ medicamentoId, periodo, onVoltar }) {
               <li key={mov.id} className="extrato-linha">
                 <span className="extrato-info">
                   <span className="extrato-tipo">{ROTULO_SUBTIPO[mov.subtipo]}</span>
+                  {/* Residente só vem preenchido em baixa por dose de
+                      medicamento da casa (DEC-049) — em medicamento de um
+                      residente seria repetir o cabeçalho. */}
                   <span className="extrato-detalhe">
                     {dataHoraLocal(mov.criado_em)}
-                    {mov.cuidador ? ` — ${mov.cuidador}` : ''}
+                    {mov.cuidador ? ` — Cuidadora: ${mov.cuidador}` : ''}
+                    {mov.residente ? ` · Residente: ${mov.residente}` : ''}
                   </span>
                   {mov.motivo && <span className="extrato-detalhe">{mov.motivo}</span>}
                   {resumoLotesMov(mov.lotes) && (

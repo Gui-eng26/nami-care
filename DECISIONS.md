@@ -1209,3 +1209,119 @@ passou a exigir `horario_id` não nulo: **INSERT direto do cliente = dose agenda
 RPC, a resolução em lote de pendências) rodam como owner e não passam por RLS.
 
 **A ronda não muda.** Migration `20260722000800_dose_sos_reestruturada`.
+
+## DEC-048 — Fonte única da adesão e extrato por categoria (estende a DEC-030 e a DEC-046)
+**Data:** 2026-07-23 | **Status:** aprovada (Sessão #13)
+
+**Contexto:** o relatório de adesão entrega só o agregado. Depois da Sessão #12, o
+Guilherme registrou uma dose SOS de dipirona **da casa** para a Alzira: o dado foi
+gravado certo — a adesão dela somou +1 SOS, o extrato da dipirona registrou a
+baixa —, mas **nenhuma tela mostrava que foi a Alzira quem tomou**. Dava para
+saber que houve 3 não tomadas no período, nunca *quais*. Sem o "quais", não há
+como agir sobre uma não adesão, que é justamente o motivo de existir do relatório.
+
+**O risco real não era a listagem — era a segunda implementação.** `relatorio_adesao`
+contava as categorias com um `where` escrito dentro dela. Se o detalhe nascesse
+como RPC separada com `where` próprio, passariam a existir **duas implementações
+da mesma pergunta**. No dia em que divergissem, a tela diria "4 não tomadas" e
+listaria 3 — e o relatório inteiro perderia a confiança da cuidadora. O projeto já
+resolveu esse padrão uma vez: a ronda consome `doses_do_turno` e não recalcula
+slots.
+
+**Decisão — uma fonte, dois consumidores:**
+1. Nasce **`fn_doses_adesao(p_inicio, p_fim, p_idoso_id)`** como fonte única das
+   doses que compõem a adesão: uma linha por `administracoes` no período.
+   `relatorio_adesao` é reescrita para **contar em cima dela**
+   (`count(*) filter (where categoria = ...)`); o detalhe é a **mesma função
+   filtrada**. Por construção, o que se lista é o que se conta.
+2. A **regra de período assimétrica** mora nela e só nela: dose agendada filtra por
+   `prevista_em`, dose SOS por `registrado_em` (SOS não tem `prevista_em` —
+   DEC-014/023). Antes estava espalhada em dois `select`.
+3. O **dono resolvido** `coalesce(a.idoso_id, m.idoso_id)` (DEC-045/046) e o
+   mapeamento status → categoria passam a viver no mesmo lugar. As chaves são
+   exatamente as que o JSON já devolvia e que a tela já usava
+   (`no_horario`, `atrasada`, `recusada`, `nao_tomada`, `nao_apurada`, `sos`) —
+   **sem camada de tradução entre banco e tela**.
+4. `relatorio_adesao` manteve **assinatura e JSON idênticos, campo por campo**.
+   A parte 1 desta sessão é refactor puro; provado comparando o jsonb inteiro
+   antes × depois, para a casa e cada residente, em três períodos: **39
+   comparações, 0 divergências**.
+
+**Fora da função, de propósito:** `pendentes` (doses vencidas sem tratativa no
+turno aberto). São doses que **ainda não têm linha em `administracoes`** — fonte
+estruturalmente diferente, que continua vindo de `doses_do_turno`. A faixa amarela
+delas no rodapé do card não é categoria e não ganha clique.
+
+**Decisão — o extrato (`detalhe_adesao`):**
+- **Só na visão por residente.** A RPC exige `p_idoso_id` (`residente_obrigatorio`);
+  na visão "Toda a casa" as barras não são clicáveis, com uma dica curta no lugar.
+  Uma lista de centenas de doses de onze pessoas não ajuda a agir sobre nenhuma.
+- **As cinco categorias existentes** ganham clique — inclusive "Pendente (não
+  apurado)" — mais a linha de **SOS**. **Nenhuma categoria nova é criada**, e o
+  cálculo da adesão não muda em nada.
+- Abrem **mesmo com zero**: a lista vazia é resposta ("nenhuma dose nesta
+  categoria"), não um beco.
+- **Teto de 200 linhas**, mais recentes primeiro, ordenadas pelo **instante de
+  referência** (`prevista_em` na agendada, `registrado_em` no SOS — a mesma
+  assimetria do período governando a ordem). `total` devolve a contagem **real**
+  antes do corte e `truncado` diz que houve corte: a tela avisa sempre. Uma lista
+  que mente sobre o próprio tamanho é pior que lista nenhuma.
+- A categoria decide o que a linha diz: **atrasada mostra previsto × registrado**
+  ("previsto 21/07, 08:00, registrado 10:03") porque o buraco entre os dois é a
+  informação; "pendente" marca que veio da resolução em lote (DEC-034); SOS leva
+  o chip **"Da casa"** quando o medicamento é da caixa comum. `observacao`, quando
+  existe, vira linha secundária — quando não existe, a linha não é renderizada,
+  sem placeholder.
+- O sentinela "Da Casa" não precisou de caso especial: nenhuma dose resolve para
+  ele (DEC-046), então a lista vem naturalmente vazia.
+
+**Nada de schema.** Todo o dado já estava gravado desde a DEC-045. Migrations
+`20260723000100_adesao_fonte_unica` e `20260723000200_detalhe_adesao`.
+
+## DEC-049 — Dono da dose visível no extrato e leitura unificada do ledger (estende a DEC-036/043/045)
+**Data:** 2026-07-23 | **Status:** aprovada (Sessão #13)
+
+**Contexto — duas coisas ligadas pela mesma causa.**
+
+**(a)** No extrato de um medicamento **da casa**, a baixa aparecia com data, hora,
+cuidadora, lote e validade — mas não com **quem tomou**, que é justamente o que a
+DEC-045 passou a gravar. O estoque compartilhado não criou o problema; tornou-o
+visível.
+
+**(b)** O extrato de movimentação existia em **duas telas que liam o ledger por
+caminhos diferentes**: `FichaEstoque` lia `movimentacoes_estoque` direto pelo
+PostgREST (últimas 50, sem período, rotulando por **`tipo`**) e
+`ExtratoMovimentacoes` lia pela RPC `extrato_medicamento` (com período e filtro de
+subtipo, rotulando por **`subtipo`**). Isso já produzia divergência: um ajuste de
+contagem para baixo lia "Ajuste de contagem" numa tela e "Ajuste de contagem (a
+menos)" na outra. E impedia (a): pelo caminho direto, resolver o `coalesce` do
+dono e o teste de sentinela exigiria a regra **em JavaScript**, contra a convenção
+de manter regra de negócio no banco.
+
+**Decisão — unificar (Opção A).** A ficha passa a consumir `extrato_medicamento`.
+Uma leitura só do ledger; a inconsistência de rótulo morre junto, e
+`ROTULO_MOVIMENTACAO` foi removido do `formato.js` por ficar sem uso.
+
+Para a RPC atender a ficha, ganhou **período opcional**:
+- ambos nulos → **sem recorte de data, últimas 50** (o comportamento que a ficha
+  sempre teve);
+- ambos preenchidos → como antes;
+- **um só nulo → `periodo_invalido`** (meio período é engano de chamada, não
+  intenção).
+
+A assinatura antiga, de quatro parâmetros obrigatórios, foi **removida com
+`drop function`** antes do replace — duas sobrecargas com os mesmos tipos e
+defaults diferentes deixariam o schema ambíguo.
+
+**Campo novo `residente`**, preenchido **só** quando a movimentação é baixa por
+dose tomada (`subtipo = 'dose'`, com `administracao_id`) **e** o medicamento é da
+casa, pelo dono resolvido `coalesce(a.idoso_id, m.idoso_id)`. Em medicamento já
+vinculado a um residente seria redundante — o cabeçalho da tela já diz de quem é.
+Compra, ajuste, perda e perda por recusa **nunca** mostram residente. Rótulos
+exatos, para não haver dois nomes soltos na mesma linha: **`Cuidadora: Ana`** e
+**`Residente: Alzira`**.
+
+Tudo o mais preservado: subtipo derivado pelo **sinal** da quantidade, filtro
+combinável, `lotes` por movimentação (DEC-043), bloco `medicamento`. Somente
+leitura — nenhuma escrita no ledger, nenhuma mudança de schema. Migration
+`20260723000300_extrato_dono_da_dose`.
