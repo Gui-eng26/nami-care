@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { FORMAS_CATALOGO, fmtForma } from '../lib/formato.js'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -46,14 +47,20 @@ export default function FormMedicamento({
   onFechar,
   onSalvar
 }) {
-  // catalogo escolhido: { id, nome, dosagem, forma_farmaceutica } | null.
+  // catalogo escolhido: { id, nome, dosagem, forma_farmaceutica, unidade_dose,
+  // gotas_por_ml, volume_frasco_ml } | null. unidade_dose e companhia (DEC-051)
+  // vêm do embed `catalogo:catalogo_medicamentos(...)` que a tela de gestão
+  // passa em `medicamento`, ou direto do resultado da busca.
   const [catalogo, setCatalogo] = useState(
     medicamento
       ? {
           id: medicamento.catalogo_id,
           nome: medicamento.nome,
           dosagem: medicamento.dosagem,
-          forma_farmaceutica: medicamento.forma_farmaceutica
+          forma_farmaceutica: medicamento.forma_farmaceutica,
+          unidade_dose: medicamento.catalogo?.unidade_dose ?? null,
+          gotas_por_ml: medicamento.catalogo?.gotas_por_ml ?? null,
+          volume_frasco_ml: medicamento.catalogo?.volume_frasco_ml ?? null
         }
       : null
   )
@@ -61,14 +68,61 @@ export default function FormMedicamento({
   const [modo, setModo] = useState(medicamento ? 'escolhido' : 'buscar')
   const [termo, setTermo] = useState('')
   const [resultados, setResultados] = useState([])
-  const [novo, setNovo] = useState({ nome: '', dosagem: '', forma: '' })
+  // Forma farmacêutica de item novo (DEC-051): lista fechada + "Outra" (texto
+  // livre). formaEscolha guarda o rótulo escolhido, ou 'outra'.
+  const [novo, setNovo] = useState({
+    nome: '',
+    dosagem: '',
+    formaEscolha: '',
+    formaLivre: '',
+    gotasPorMl: '20',
+    volumeFrascoMl: ''
+  })
   const [erroCatalogo, setErroCatalogo] = useState(null)
+
+  // Derivados da escolha de forma no modo 'novo'.
+  const formaFechadaNovo = FORMAS_CATALOGO.find((f) => f.rotulo === novo.formaEscolha)
+  const unidadeDoseNovo = novo.formaEscolha === '' ? null : formaFechadaNovo ? formaFechadaNovo.unidadeDose : 'unidade'
+  const formaFinalNovo = novo.formaEscolha === 'outra' ? novo.formaLivre.trim() : novo.formaEscolha
+  const precisaGotasNovo = unidadeDoseNovo === 'gota'
+  const precisaVolumeNovo = unidadeDoseNovo === 'gota' || unidadeDoseNovo === 'ml'
+
+  // Unidade/fator "em vigor" para os rótulos e a conversão de estoque mínimo
+  // em frascos (Parte 5): do item novo sendo criado, ou do catálogo escolhido.
+  const unidadeAtual = modo === 'novo' ? unidadeDoseNovo : catalogo?.unidade_dose ?? null
+  const formaAtual = modo === 'novo' ? formaFinalNovo : catalogo?.forma_farmaceutica ?? null
+  const gotasPorMlAtual = modo === 'novo' ? novo.gotasPorMl : catalogo?.gotas_por_ml
+  const volumeFrascoMlAtual = modo === 'novo' ? novo.volumeFrascoMl : catalogo?.volume_frasco_ml
+  const rotuloUnidadePlural = fmtForma(2, formaAtual, unidadeAtual)
+  const liquidoAtual = unidadeAtual === 'gota' || unidadeAtual === 'ml'
+  // Só converte estoque mínimo pra frascos se o fator estiver completo —
+  // senão o campo cai para a unidade da dose mesmo (gotas/ml crus).
+  const podeConverterFrascos =
+    liquidoAtual &&
+    Number(volumeFrascoMlAtual) > 0 &&
+    (unidadeAtual !== 'gota' || Number(gotasPorMlAtual) > 0)
+  const fatorMlPorFrasco = () =>
+    Number(volumeFrascoMlAtual) * (unidadeAtual === 'gota' ? Number(gotasPorMlAtual) : 1)
 
   const [posologia, setPosologia] = useState(medicamento?.posologia ?? '')
   const [tipo, setTipo] = useState(daCasa ? 'sos' : medicamento?.tipo ?? 'continuo')
+  // Sempre canônico (unidade da dose — DEC-027), igual ao que a RPC espera. Em
+  // líquido com fator completo, o CAMPO exibe frascos (Parte 5); a conversão é
+  // só de exibição, feita em onChangeEstoqueMinimo/estoqueMinimoDisplay abaixo.
   const [estoqueMinimo, setEstoqueMinimo] = useState(
     medicamento?.estoque_minimo != null ? String(Number(medicamento.estoque_minimo)) : ''
   )
+  const estoqueMinimoDisplay =
+    podeConverterFrascos && estoqueMinimo !== ''
+      ? String(Number(estoqueMinimo) / fatorMlPorFrasco())
+      : estoqueMinimo
+  function onChangeEstoqueMinimo(valor) {
+    if (valor === '') {
+      setEstoqueMinimo('')
+      return
+    }
+    setEstoqueMinimo(podeConverterFrascos ? String(Number(valor) * fatorMlPorFrasco()) : valor)
+  }
 
   // Estoque inicial (Sessão #8) — só no cadastro; em branco = sem movimentação.
   // Desde a Sessão #11 leva lote (opcional) e validade (obrigatória — DEC-041).
@@ -93,7 +147,7 @@ export default function FormMedicamento({
     let cancelado = false
     supabase
       .from('catalogo_medicamentos')
-      .select('id, nome, dosagem, forma_farmaceutica')
+      .select('id, nome, dosagem, forma_farmaceutica, unidade_dose, gotas_por_ml, volume_frasco_ml')
       .ilike('nome', `%${t}%`)
       .order('nome')
       .limit(15)
@@ -117,16 +171,34 @@ export default function FormMedicamento({
     let nome = ''
     let dosagem = ''
     let forma = ''
+    let unidadeDose = null
+    let gotasPorMl = null
+    let volumeFrascoMl = null
     if (modo === 'escolhido' && catalogo?.id) {
       catalogoId = catalogo.id
     } else if (modo === 'novo') {
       nome = novo.nome.trim()
       dosagem = novo.dosagem.trim()
-      forma = novo.forma.trim()
+      forma = formaFinalNovo
       if (nome === '') {
         setErroCatalogo('Informe o nome do medicamento.')
         return
       }
+      if (novo.formaEscolha === 'outra' && forma === '') {
+        setErroCatalogo('Informe a forma farmacêutica, ou volte e escolha uma da lista.')
+        return
+      }
+      unidadeDose = unidadeDoseNovo
+      if (precisaGotasNovo && !(Number(novo.gotasPorMl) > 0)) {
+        setErroCatalogo('Informe quantas gotas tem 1 ml (confira na bula — 20 é só sugestão).')
+        return
+      }
+      if (precisaVolumeNovo && !(Number(novo.volumeFrascoMl) > 0)) {
+        setErroCatalogo('Informe o volume do frasco, em ml.')
+        return
+      }
+      gotasPorMl = precisaGotasNovo ? Number(novo.gotasPorMl) : null
+      volumeFrascoMl = precisaVolumeNovo ? Number(novo.volumeFrascoMl) : null
     } else {
       setErroCatalogo('Selecione um medicamento do catálogo ou crie um novo item.')
       return
@@ -157,6 +229,10 @@ export default function FormMedicamento({
       nome,
       dosagem,
       forma,
+      // Só usados quando catalogoId é null (item novo de catálogo — DEC-051).
+      unidadeDose,
+      gotasPorMl,
+      volumeFrascoMl,
       posologia: posologia.trim(),
       tipo,
       // Estoque mínimo só faz sentido para SOS (DEC-027).
@@ -170,7 +246,9 @@ export default function FormMedicamento({
               origem: origemInicial,
               data: origemInicial === 'compra' ? dataInicial : null,
               lote: loteInicial.trim(),
-              validade: validadeInicial
+              validade: validadeInicial,
+              // Fator congelado no lote (DEC-053), quando o item é líquido.
+              gotasPorMl: liquidoAtual && unidadeAtual === 'gota' ? Number(gotasPorMlAtual) : null
             }
           : null
     })
@@ -238,7 +316,7 @@ export default function FormMedicamento({
                   type="button"
                   className="botao-secundario botao-catalogo-novo"
                   onClick={() => {
-                    setNovo({ nome: termo.trim(), dosagem: '', forma: '' })
+                    setNovo({ nome: termo.trim(), dosagem: '', formaEscolha: '', formaLivre: '', gotasPorMl: '20', volumeFrascoMl: '' })
                     setModo('novo')
                     setErroCatalogo(null)
                   }}
@@ -278,14 +356,62 @@ export default function FormMedicamento({
                     />
                   </label>
                   <label>
-                    Forma
-                    <input
-                      value={novo.forma}
-                      placeholder="ex.: comprimido"
-                      onChange={(e) => setNovo((n) => ({ ...n, forma: e.target.value }))}
-                    />
+                    Forma farmacêutica
+                    <select
+                      value={novo.formaEscolha}
+                      onChange={(e) => setNovo((n) => ({ ...n, formaEscolha: e.target.value }))}
+                    >
+                      <option value="">— selecione —</option>
+                      {FORMAS_CATALOGO.map((f) => (
+                        <option key={f.rotulo} value={f.rotulo}>
+                          {f.rotulo}
+                        </option>
+                      ))}
+                      <option value="outra">Outra (especificar)</option>
+                    </select>
                   </label>
                 </div>
+                {novo.formaEscolha === 'outra' && (
+                  <label>
+                    Qual forma?
+                    <input
+                      value={novo.formaLivre}
+                      placeholder="ex.: creme, spray nasal"
+                      onChange={(e) => setNovo((n) => ({ ...n, formaLivre: e.target.value }))}
+                    />
+                  </label>
+                )}
+                {precisaGotasNovo && (
+                  <label>
+                    Gotas por ml
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="decimal"
+                      value={novo.gotasPorMl}
+                      onChange={(e) => setNovo((n) => ({ ...n, gotasPorMl: e.target.value }))}
+                    />
+                    <span className="bloco-explicacao">
+                      20 é a referência usual, mas varia com o conta-gotas e a viscosidade —
+                      confira na bula deste medicamento.
+                    </span>
+                  </label>
+                )}
+                {precisaVolumeNovo && (
+                  <label>
+                    Volume do frasco (ml)
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="decimal"
+                      placeholder="ex.: 10"
+                      value={novo.volumeFrascoMl}
+                      onChange={(e) => setNovo((n) => ({ ...n, volumeFrascoMl: e.target.value }))}
+                    />
+                  </label>
+                )}
                 <button
                   type="button"
                   className="botao-mini"
@@ -322,15 +448,17 @@ export default function FormMedicamento({
           )}
           {tipo === 'sos' && (
             <label>
-              Estoque mínimo de segurança (opcional)
+              {/* Frasco na entrada/exibição (Parte 5); o valor gravado continua
+                  na unidade da dose (DEC-027) — só a conversão muda. */}
+              Estoque mínimo de segurança em {podeConverterFrascos ? 'frascos' : rotuloUnidadePlural} (opcional)
               <input
                 type="number"
                 min="0"
-                step="0.5"
+                step={podeConverterFrascos ? '0.1' : '0.5'}
                 inputMode="decimal"
                 placeholder="alerta de recompra abaixo desta quantidade"
-                value={estoqueMinimo}
-                onChange={(e) => setEstoqueMinimo(e.target.value)}
+                value={estoqueMinimoDisplay}
+                onChange={(e) => onChangeEstoqueMinimo(e.target.value)}
               />
             </label>
           )}
@@ -361,7 +489,7 @@ export default function FormMedicamento({
                     />
                   </label>
                   <label>
-                    Dose (passos de 0,5)
+                    Dose ({rotuloUnidadePlural}, passos de 0,5)
                     <input
                       type="number"
                       min="0.5"
@@ -407,7 +535,7 @@ export default function FormMedicamento({
             <div className="catalogo-bloco">
               <span className="catalogo-rotulo">Estoque inicial (opcional)</span>
               <label>
-                Quantidade
+                Quantidade{formaAtual || unidadeAtual ? ` (${rotuloUnidadePlural})` : ''}
                 <input
                   type="number"
                   min="0"

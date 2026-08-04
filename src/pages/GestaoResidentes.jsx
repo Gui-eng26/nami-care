@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtForma } from '../lib/formato.js'
+import { fmtForma, fmtFrascosEquivalente } from '../lib/formato.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
 import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
@@ -173,10 +173,15 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
   const [aviso, setAviso] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
+  // catalogo:catalogo_medicamentos(...) embute a unidade estruturada (DEC-051)
+  // do produto — sem isso os rótulos de dose caem no fallback de sempre.
+  const SELECT_MEDICAMENTO =
+    'id, catalogo_id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo, catalogo:catalogo_medicamentos(unidade_dose, gotas_por_ml, volume_frasco_ml)'
+
   const carregarMedicamentos = useCallback(async () => {
     const { data, error } = await supabase
       .from('medicamentos')
-      .select('id, catalogo_id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo')
+      .select(SELECT_MEDICAMENTO)
       .eq('idoso_id', residente.id)
       .order('ativo', { ascending: false })
       .order('nome')
@@ -216,7 +221,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
           await carregarMedicamentos()
           const { data } = await supabase
             .from('medicamentos')
-            .select('id, catalogo_id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo')
+            .select(SELECT_MEDICAMENTO)
             .eq('id', medicamento.id)
             .single()
           if (data) setMedicamento(data)
@@ -363,7 +368,10 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
               p_forma_farmaceutica: valores.forma || null,
               p_posologia: valores.posologia || null,
               p_tipo: valores.tipo,
-              p_estoque_minimo: valores.estoqueMinimo
+              p_estoque_minimo: valores.estoqueMinimo,
+              p_unidade_dose: valores.unidadeDose,
+              p_gotas_por_ml: valores.gotasPorMl,
+              p_volume_frasco_ml: valores.volumeFrascoMl
             })
             if (r) {
               setForm(null)
@@ -488,7 +496,8 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
                     <span className="item-gestao-nome">
                       {h.hora.slice(0, 5)}
                       <span className="item-gestao-detalhe">
-                        {Number(h.qtd_dose)} {fmtForma(h.qtd_dose, medicamento.forma_farmaceutica)}
+                        {Number(h.qtd_dose)}{' '}
+                      {fmtForma(h.qtd_dose, medicamento.forma_farmaceutica, medicamento.catalogo?.unidade_dose)}
                       </span>
                     </span>
                     <span className="item-gestao-chips">
@@ -536,7 +545,17 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
           Medicamento SOS: sem horários fixos — registrado como dose avulsa na
           tela da ronda.{' '}
           {medicamento.estoque_minimo !== null
-            ? `Estoque mínimo de segurança: ${Number(medicamento.estoque_minimo)} (alerta de recompra abaixo disso).`
+            ? (() => {
+                const un = medicamento.catalogo?.unidade_dose
+                const frascos = fmtFrascosEquivalente(
+                  medicamento.estoque_minimo,
+                  un,
+                  medicamento.catalogo?.volume_frasco_ml,
+                  medicamento.catalogo?.gotas_por_ml
+                )
+                const qtd = `${Number(medicamento.estoque_minimo)} ${fmtForma(medicamento.estoque_minimo, medicamento.forma_farmaceutica, un)}`
+                return `Estoque mínimo de segurança: ${qtd}${frascos ? ` (${frascos})` : ''} (alerta de recompra abaixo disso).`
+              })()
             : 'Sem estoque mínimo definido — o alerta de recompra fica desligado.'}
         </p>
       )}
@@ -573,7 +592,10 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
               p_forma_farmaceutica: valores.forma || null,
               p_posologia: valores.posologia || null,
               p_tipo: valores.tipo,
-              p_estoque_minimo: valores.estoqueMinimo
+              p_estoque_minimo: valores.estoqueMinimo,
+              p_unidade_dose: valores.unidadeDose,
+              p_gotas_por_ml: valores.gotasPorMl,
+              p_volume_frasco_ml: valores.volumeFrascoMl
             })
             if (r) {
               setForm(null)
@@ -585,6 +607,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
       {form?.modo === 'horario' && (
         <FormHorario
           horario={form.horario}
+          rotuloUnidade={fmtForma(2, medicamento.forma_farmaceutica, medicamento.catalogo?.unidade_dose)}
           ocupado={ocupado}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
@@ -663,7 +686,7 @@ function FormResidente({ residente, ocupado, onFechar, onSalvar }) {
   )
 }
 
-function FormHorario({ horario, ocupado, onFechar, onSalvar }) {
+function FormHorario({ horario, rotuloUnidade, ocupado, onFechar, onSalvar }) {
   const [hora, setHora] = useState(horario ? horario.hora.slice(0, 5) : '')
   const [qtdDose, setQtdDose] = useState(horario ? String(Number(horario.qtd_dose)) : '1')
 
@@ -684,7 +707,7 @@ function FormHorario({ horario, ocupado, onFechar, onSalvar }) {
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
             <label>
-              Dose (passos de 0,5)
+              Dose ({rotuloUnidade ?? 'unidades'}, passos de 0,5)
               <input
                 type="number"
                 min="0.5"

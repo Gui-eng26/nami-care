@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { mensagemErro } from '../lib/erros.js'
-import { fmtQtd, fmtForma, ROTULO_SUBTIPO, dataHoraLocal, dataLocal, resumoLotesMov } from '../lib/formato.js'
+import {
+  fmtQtd,
+  fmtForma,
+  fmtFrascosEquivalente,
+  frascosParaComprar,
+  ROTULO_SUBTIPO,
+  dataHoraLocal,
+  dataLocal,
+  resumoLotesMov
+} from '../lib/formato.js'
 import ExtratoMovimentacoes from './ExtratoMovimentacoes.jsx'
 import NovoMedicamento from './NovoMedicamento.jsx'
 
@@ -72,16 +81,34 @@ function rotuloSituacao(item) {
       alerta: item.alerta_reposicao
     }
   }
+  const un = (qtd) => fmtForma(qtd, item.forma_farmaceutica, item.unidade_dose)
   if (item.estoque_minimo === null) {
     return { texto: 'SOS — sem mínimo definido', alerta: false }
   }
   if (item.alerta_reposicao) {
     return {
-      texto: `Abaixo do mínimo (${fmtQtd(item.saldo)} de ${fmtQtd(item.estoque_minimo)})`,
+      texto: `Abaixo do mínimo (${fmtQtd(item.saldo)} de ${fmtQtd(item.estoque_minimo)} ${un(item.estoque_minimo)})`,
       alerta: true
     }
   }
-  return { texto: `SOS — mínimo ${fmtQtd(item.estoque_minimo)}`, alerta: false }
+  return {
+    texto: `SOS — mínimo ${fmtQtd(item.estoque_minimo)} ${un(item.estoque_minimo)}`,
+    alerta: false
+  }
+}
+
+// Sugestão de compra formatada (DEC-028, estendida na Parte 4): frascos
+// inteiros para líquido, unidade de dose crua para sólido — a farmácia não
+// vende "380 gotas".
+function textoSugestaoCompra(item) {
+  const frascos = frascosParaComprar(
+    item.sugestao_compra,
+    item.unidade_dose,
+    item.volume_frasco_ml,
+    item.catalogo_gotas_por_ml
+  )
+  if (frascos !== null) return `comprar ${frascos} ${frascos === 1 ? 'frasco' : 'frascos'}`
+  return `comprar ${fmtQtd(item.sugestao_compra)} ${fmtForma(item.sugestao_compra, item.forma_farmaceutica, item.unidade_dose)}`
 }
 
 // Visão de estoque (DEC-004/DEC-027): tudo que a tela mostra vem da view
@@ -97,9 +124,11 @@ function EstoqueAtual() {
     const [{ data, error }, lotesRes] = await Promise.all([
       supabase.from('cobertura_estoque').select('*').order('nome_idoso').order('nome'),
       // Lotes vivos (saldo > 0), próximo a vencer primeiro (DEC-043).
+      // gotas_por_ml é o fator congelado (DEC-053) — pode divergir do padrão
+      // do catálogo se a farmácia usou um frasco/gotejador diferente.
       supabase
         .from('lotes_estoque_vivo')
-        .select('medicamento_id, lote, validade, saldo_atual')
+        .select('medicamento_id, lote, validade, saldo_atual, gotas_por_ml')
         .order('validade', { ascending: true })
         .order('data_entrada', { ascending: true })
     ])
@@ -225,6 +254,7 @@ function EstoqueAtual() {
 
 function ItemEstoque({ item, lotes = [], mostrarResidente = false, onAbrir }) {
   const situacao = rotuloSituacao(item)
+  const frascos = fmtFrascosEquivalente(item.saldo, item.unidade_dose, item.volume_frasco_ml, item.catalogo_gotas_por_ml)
   return (
     <button type="button" className={`dose ${item.ativo ? '' : 'item-inativo'}`} onClick={onAbrir}>
       <span className="dose-idoso">
@@ -234,10 +264,11 @@ function ItemEstoque({ item, lotes = [], mostrarResidente = false, onAbrir }) {
         {!item.ativo && <span className="chip chip-inativo"> Inativo</span>}
       </span>
       <span className="dose-medicamento">
-        {fmtQtd(item.saldo)} {fmtForma(item.saldo, item.forma_farmaceutica)} —{' '}
+        {fmtQtd(item.saldo)} {fmtForma(item.saldo, item.forma_farmaceutica, item.unidade_dose)}
+        {frascos ? ` (${frascos})` : ''} —{' '}
         <span className={situacao.alerta ? 'estoque-rotulo-alerta' : ''}>{situacao.texto}</span>
         {situacao.alerta && item.sugestao_compra !== null && item.tipo === 'continuo' && (
-          <> · comprar {fmtQtd(item.sugestao_compra)}</>
+          <> · {textoSugestaoCompra(item)}</>
         )}
       </span>
       <ResumoLotes lotes={lotes} />
@@ -326,12 +357,22 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
 
       <p className="estoque-saldo">
         {fmtQtd(item.saldo)}{' '}
-        <span className="estoque-saldo-unidade">{fmtForma(item.saldo, item.forma_farmaceutica)}</span>
+        <span className="estoque-saldo-unidade">
+          {fmtForma(item.saldo, item.forma_farmaceutica, item.unidade_dose)}
+        </span>
       </p>
+      {(() => {
+        const frascos = fmtFrascosEquivalente(item.saldo, item.unidade_dose, item.volume_frasco_ml, item.catalogo_gotas_por_ml)
+        return frascos ? (
+          <p className="estoque-rotulo">
+            {frascos} — estimativa: o volume real da gota varia com técnica e frasco.
+          </p>
+        ) : null
+      })()}
       <p className={situacao.alerta ? 'estoque-rotulo-alerta' : 'estoque-rotulo'}>
         {situacao.texto}
         {situacao.alerta && item.sugestao_compra !== null && item.tipo === 'continuo' && (
-          <> — sugestão: comprar {fmtQtd(item.sugestao_compra)} para ~30 dias</>
+          <> — sugestão: {textoSugestaoCompra(item)} para ~30 dias</>
         )}
       </p>
 
@@ -349,7 +390,18 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
                 </span>
                 <span className="lote-detalhe">
                   Vence {dataLocal(l.validade)} · {fmtQtd(l.saldo_atual)}{' '}
-                  {fmtForma(l.saldo_atual, item.forma_farmaceutica)}
+                  {fmtForma(l.saldo_atual, item.forma_farmaceutica, item.unidade_dose)}
+                  {/* Fator do PRÓPRIO lote (DEC-053), não o padrão do catálogo —
+                      pode ter sido comprado com frasco/gotejador diferente. */}
+                  {(() => {
+                    const frascos = fmtFrascosEquivalente(
+                      l.saldo_atual,
+                      item.unidade_dose,
+                      item.volume_frasco_ml,
+                      l.gotas_por_ml ?? item.catalogo_gotas_por_ml
+                    )
+                    return frascos ? ` (${frascos})` : ''
+                  })()}
                 </span>
               </li>
             ))}
@@ -420,7 +472,8 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
                 p_validade: valores.validade,
                 p_lote: valores.lote || null,
                 p_data: valores.data,
-                p_observacao: valores.observacao || null
+                p_observacao: valores.observacao || null,
+                p_gotas_por_ml: valores.gotasPorMl ?? null
               },
               (r) => `Compra registrada. Saldo atual: ${fmtQtd(r.saldo)}.`
             )
@@ -471,12 +524,29 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
 }
 
 function ModalEntrada({ item, onFechar, onSalvar }) {
+  // Líquido compra-se em frasco fechado, não em gotas soltas (Parte 4). O
+  // sólido continua digitando a quantidade direto, como sempre.
+  const liquido = item.unidade_dose === 'gota' || item.unidade_dose === 'ml'
   const [quantidade, setQuantidade] = useState('')
+  const [frascos, setFrascos] = useState('1')
+  const [mlPorFrasco, setMlPorFrasco] = useState(
+    item.volume_frasco_ml != null ? String(Number(item.volume_frasco_ml)) : ''
+  )
+  const [gotasPorMl, setGotasPorMl] = useState(
+    item.catalogo_gotas_por_ml != null ? String(Number(item.catalogo_gotas_por_ml)) : '20'
+  )
   const [data, setData] = useState(hojeLocal())
   const [lote, setLote] = useState('')
   const [validade, setValidade] = useState('')
   const [observacao, setObservacao] = useState('')
+  const [erro, setErro] = useState(null)
   const [salvando, setSalvando] = useState(false)
+
+  // Total convertido para a unidade da dose (DEC-052) — só na borda de entrada.
+  const totalLiquido =
+    Number(frascos) > 0 && Number(mlPorFrasco) > 0 && (item.unidade_dose !== 'gota' || Number(gotasPorMl) > 0)
+      ? Number(frascos) * Number(mlPorFrasco) * (item.unidade_dose === 'gota' ? Number(gotasPorMl) : 1)
+      : null
 
   return (
     <div className="modal-fundo" onClick={onFechar}>
@@ -489,9 +559,21 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
           className="formulario"
           onSubmit={async (e) => {
             e.preventDefault()
+            setErro(null)
+            let qtd = Number(quantidade)
+            let gotas = null
+            if (liquido) {
+              if (totalLiquido === null) {
+                setErro('Informe frascos, ml por frasco' + (item.unidade_dose === 'gota' ? ' e gotas por ml.' : '.'))
+                return
+              }
+              qtd = totalLiquido
+              gotas = item.unidade_dose === 'gota' ? Number(gotasPorMl) : null
+            }
             setSalvando(true)
             await onSalvar({
-              quantidade: Number(quantidade),
+              quantidade: qtd,
+              gotasPorMl: gotas,
               data,
               lote: lote.trim(),
               validade,
@@ -500,20 +582,85 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
             setSalvando(false)
           }}
         >
-          <div className="formulario-linha">
-            <label>
-              Quantidade
-              <input
-                type="number"
-                min="0.5"
-                step="0.5"
-                inputMode="decimal"
-                value={quantidade}
-                onChange={(e) => setQuantidade(e.target.value)}
-                required
-                autoFocus
-              />
-            </label>
+          {liquido ? (
+            <>
+              <div className="formulario-linha">
+                <label>
+                  Quantos frascos
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="decimal"
+                    value={frascos}
+                    onChange={(e) => setFrascos(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </label>
+                <label>
+                  ml por frasco
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="decimal"
+                    value={mlPorFrasco}
+                    onChange={(e) => setMlPorFrasco(e.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+              {item.unidade_dose === 'gota' && (
+                <label>
+                  Gotas por ml
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="decimal"
+                    value={gotasPorMl}
+                    onChange={(e) => setGotasPorMl(e.target.value)}
+                    required
+                  />
+                  <span className="bloco-explicacao">Confira na bula — pode variar do padrão da casa.</span>
+                </label>
+              )}
+              <p className="bloco-explicacao">
+                {totalLiquido !== null
+                  ? `= ${fmtQtd(totalLiquido)} ${fmtForma(totalLiquido, item.forma_farmaceutica, item.unidade_dose)} no total.`
+                  : 'Preencha os campos acima para ver o total.'}
+              </p>
+              {erro && <p className="aviso aviso-erro">{erro}</p>}
+            </>
+          ) : (
+            <div className="formulario-linha">
+              <label>
+                Quantidade
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  inputMode="decimal"
+                  value={quantidade}
+                  onChange={(e) => setQuantidade(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </label>
+              <label>
+                Data da compra
+                <input
+                  type="date"
+                  value={data}
+                  max={hojeLocal()}
+                  onChange={(e) => setData(e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+          )}
+          {liquido && (
             <label>
               Data da compra
               <input
@@ -524,7 +671,7 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
                 required
               />
             </label>
-          </div>
+          )}
           <div className="formulario-linha">
             <label>
               Lote (opcional)

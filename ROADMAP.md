@@ -481,6 +481,63 @@ reproduzido no navegador. Fica para uma eventual sessão de `safe-area`.
 
 ---
 
+## Sessão 15 — Unidade de dose estruturada e estoque de líquidos ✅ (2026-08-04)
+
+Partes 0–5 completas na mesma sessão. Decisões: **DEC-051, DEC-052, DEC-053** +
+notas de extensão em DEC-026/027/028/050.
+
+- **Parte 0 — salvaguardas.** Primeira migration desta sessão a rodar sobre
+  dado real (residentes e histórico de administração já existiam desde o
+  go-live). Cada migration testada em `begin/rollback` (backfill, constraints,
+  trigger de imutabilidade, caminho de aborto em dado inesperado) antes de
+  aplicar; auditoria pré/pós conferida a cada passo.
+- **Parte 1 (DEC-051).** `catalogo_medicamentos` ganha `unidade_dose` (lista
+  fechada), `gotas_por_ml`, `volume_frasco_ml`. Backfill determinístico:
+  `Comprimido`→`comprimido` (35), `Cápsula`→`capsula` (1) — os únicos valores
+  reais na base. Trigger novo trava `unidade_dose` após primeiro uso.
+- **Parte 2 (DEC-052).** Ledger de líquido em gotas (menor unidade da dose),
+  nunca em ml. Precisão numérica alargada de `numeric(6,2)`/`numeric(8,2)` para
+  `numeric(10,2)` em sete colunas — exigiu dropar/recriar um trigger com
+  cláusula `UPDATE OF` e três views dependentes; regressão de comprimido
+  conferida por hash idêntico antes/depois.
+- **Parte 3 (DEC-053).** `lotes_estoque.gotas_por_ml` congela o fator
+  efetivamente usado na compra — o padrão do catálogo é só sugestão.
+- **Parte 4 — compra e exibição em frascos.** Modal de compra em `Estoque.jsx`
+  ganha caminho de líquido (frascos × ml → total em gotas, com prévia ao vivo);
+  saldo/ficha/lotes mostram equivalente em frascos, rotulado como estimativa;
+  sugestão de compra de líquido arredonda para frascos inteiros. `fmtForma`
+  passa a flexionar a lista fechada por tabela (`UNIDADES`), mantendo a
+  heurística da DEC-050 só para "Outra". Rótulos de dose em `FormMedicamento`,
+  `FormHorario` (GestaoResidentes) e `DoseSos` passam a mostrar a unidade real.
+- **Parte 5.** Estoque mínimo de segurança de SOS líquido aceita
+  entrada/exibição em frascos; valor gravado continua na unidade da dose
+  (DEC-027 não muda de regra).
+- **BUG-008 registrado** (corrigido em 2026-07-23, `edef8b7` — pendência
+  herdada do go-live, sem entrada em `DECISIONS.md`/`ROADMAP.md` até agora).
+- **BUG-009 — achado e corrigido na mesma sessão.** A migration da Parte 1
+  quebrou `criar_medicamento`/`atualizar_medicamento` no caminho "criar novo
+  item de catálogo" (`unidade_dose` NOT NULL sem valor no insert) — hotfix
+  imediato, depois correção definitiva com os parâmetros novos vindos da lista
+  fechada. Um segundo call site do mesmo formulário (`NovoMedicamento.jsx`, o
+  atalho "+ Medicamento" da aba Estoque) ficou desatualizado na correção
+  definitiva e só foi achado testando o cadastro de líquido por aquele caminho
+  específico — ver DEC-051/BUG-009 para o detalhe.
+
+Testado no navegador a 375px, com turno real aberto (Thais Ceragioli Paio):
+regressão de comprimido conferida item a item contra a lista real de
+residentes; caso ponta a ponta de líquido em dois tipos (solução em gotas SOS
+e xarope) com um residente de teste dedicado (`Guilherme Teste`) — cadastro →
+compra em frascos → saldo com equivalente → dose SOS → baixa FEFO → trigger de
+imutabilidade bloqueando edição indevida. Nenhum erro de console/servidor.
+Itens de teste desativados ao final (não excluídos — ledger imutável).
+
+**Encaminhado para a Sessão #16 (não iniciado):** `posologia` estruturada +
+frequência não-diária + `criterio_uso` para SOS + `observacoes` livre —
+achado de auditoria já registrado no roteiro de planejamento, pendente de
+conversa de escopo antes de implementar.
+
+---
+
 ## Fora de escopo do MVP (backlog pós-piloto)
 
 - **Alerta de alergia** (Sessão #12 levantou, #13 encaminhou): a observação do

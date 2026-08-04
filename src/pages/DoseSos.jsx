@@ -45,7 +45,7 @@ export default function DoseSos({ onFechar, onRegistrada }) {
     // O que há para dar: SOS ativos, com saldo — dos residentes e da casa.
     supabase
       .from('cobertura_estoque')
-      .select('medicamento_id, idoso_id, nome_idoso, nome, dosagem, forma_farmaceutica, saldo, idoso_da_casa')
+      .select('medicamento_id, idoso_id, nome_idoso, nome, dosagem, forma_farmaceutica, saldo, idoso_da_casa, unidade_dose')
       .eq('tipo', 'sos')
       .eq('ativo', true)
       .eq('idoso_ativo', true)
@@ -155,7 +155,7 @@ export default function DoseSos({ onFechar, onRegistrada }) {
                     {i.idoso_da_casa && <span className="chip chip-casa"> Da casa</span>}
                     <span className="item-gestao-detalhe">
                       {' '}
-                      — estoque: {fmtQtd(i.saldo)} {fmtForma(i.saldo, i.forma_farmaceutica)}
+                      — estoque: {fmtQtd(i.saldo)} {fmtForma(i.saldo, i.forma_farmaceutica, i.unidade_dose)}
                     </span>
                   </button>
                 ))}
@@ -187,7 +187,7 @@ export default function DoseSos({ onFechar, onRegistrada }) {
             </p>
             <div className="formulario">
               <label>
-                Quantidade (passos de 0,5)
+                Quantidade ({fmtForma(2, medicamento.forma_farmaceutica, medicamento.unidade_dose)}, passos de 0,5)
                 <input
                   type="number"
                   min="0.5"

@@ -15,23 +15,71 @@ const FORMAS_EXCECAO = { gel: 'géis' }
 
 const VOGAIS_FINAIS = 'aeiouáâãéêíóôõúy'
 
-// Forma farmacêutica flexionada em número (DEC-050). Devolve SÓ a forma — a
-// quantidade fica com quem chama, para cada tela manter o próprio espaçamento e
-// a própria marcação.
+// Lista fechada de forma farmacêutica → unidade de dose (DEC-051). O
+// descritor clínico (o que a cuidadora lê) continua livre em
+// `forma_farmaceutica`; esta lista só existe para alimentar o <select> do
+// cadastro e o mapeamento para `unidade_dose`. "Outra" não entra aqui — cai no
+// texto livre, com unidade 'unidade' (fator 1).
+export const FORMAS_CATALOGO = [
+  { rotulo: 'Comprimido', unidadeDose: 'comprimido' },
+  { rotulo: 'Comprimido revestido', unidadeDose: 'comprimido' },
+  { rotulo: 'Comprimido sublingual', unidadeDose: 'comprimido' },
+  { rotulo: 'Comprimido orodispersível', unidadeDose: 'comprimido' },
+  { rotulo: 'Comprimido mastigável', unidadeDose: 'comprimido' },
+  { rotulo: 'Cápsula', unidadeDose: 'capsula' },
+  { rotulo: 'Drágea', unidadeDose: 'dragea' },
+  { rotulo: 'Solução oral em gotas', unidadeDose: 'gota' },
+  { rotulo: 'Xarope', unidadeDose: 'ml' },
+  { rotulo: 'Solução oral', unidadeDose: 'ml' },
+  { rotulo: 'Suspensão oral', unidadeDose: 'ml' },
+  { rotulo: 'Sachê / pó', unidadeDose: 'sache' },
+  { rotulo: 'Supositório', unidadeDose: 'supositorio' },
+  { rotulo: 'Adesivo transdérmico', unidadeDose: 'adesivo' }
+]
+
+// unidade_dose (código) → nome da unidade, singular/plural (DEC-051/052). É o
+// que a dose e o saldo mostram quando o medicamento tem catálogo estruturado —
+// "356 gotas", não "356 Solução oral em gotas". Líquido (gota/ml) precisa de
+// frasco (DEC-053); os demais não.
+export const UNIDADES = {
+  comprimido: { singular: 'comprimido', plural: 'comprimidos', liquido: false },
+  capsula: { singular: 'cápsula', plural: 'cápsulas', liquido: false },
+  dragea: { singular: 'drágea', plural: 'drágeas', liquido: false },
+  gota: { singular: 'gota', plural: 'gotas', liquido: true },
+  ml: { singular: 'ml', plural: 'ml', liquido: true },
+  sache: { singular: 'sachê', plural: 'sachês', liquido: false },
+  supositorio: { singular: 'supositório', plural: 'supositórios', liquido: false },
+  adesivo: { singular: 'adesivo', plural: 'adesivos', liquido: false },
+  unidade: { singular: 'unidade', plural: 'unidades', liquido: false }
+}
+
+// Forma farmacêutica (ou unidade de dose) flexionada em número (DEC-050,
+// estendida na DEC-051). Devolve SÓ a palavra — a quantidade fica com quem
+// chama, para cada tela manter o próprio espaçamento e a própria marcação.
 //
-// `forma_farmaceutica` é texto livre digitado no cadastro: não há lista fechada
-// para consultar. Daí o princípio — diante de uma terminação que as regras não
-// cobrem com segurança, devolve a palavra COMO FOI DIGITADA. "3 gel" é
-// levemente errado; "3 gels" é constrangedor e mina a confiança no app inteiro.
+// Com `unidadeDose` de um item da lista fechada, o plural vem da tabela
+// UNIDADES — resolve de vez casos como "comprimido sublingual", que a
+// heurística abaixo sempre recusou (tem espaço, então nunca flexionava).
+// Sem `unidadeDose` (chamada antiga) ou com 'unidade' (fallback de "Outra" —
+// texto livre, sem lista para consultar), cai na heurística de sempre: diante
+// de terminação que as regras não cobrem com segurança, devolve a palavra
+// COMO FOI DIGITADA. "3 gel" é levemente errado; "3 gels" é constrangedor.
 //
 // Singular quando 0 < n ≤ 1; plural nos demais casos, zero incluído. A dosagem
 // aceita meio comprimido, então "0,5 comprimido" não é caso hipotético.
-export function fmtForma(qtd, forma) {
+export function fmtForma(qtd, forma, unidadeDose) {
+  const n = Number(qtd)
+  const singular = n > 0 && n <= 1
+
+  if (unidadeDose && unidadeDose !== 'unidade' && UNIDADES[unidadeDose]) {
+    const u = UNIDADES[unidadeDose]
+    return singular ? u.singular : u.plural
+  }
+
   // Sem forma cadastrada a base é 'unidade', que flexiona — é isto que aposenta
   // o 'unidade(s)' que as telas usavam como fallback.
   const base = String(forma ?? '').trim() || 'unidade'
-  const n = Number(qtd)
-  if (n > 0 && n <= 1) return base
+  if (singular) return base
 
   const chave = base.toLowerCase()
   if (FORMAS_INVARIAVEIS.has(chave)) return base
@@ -47,6 +95,48 @@ export function fmtForma(qtd, forma) {
   if (fim === 'r' || fim === 'z') return `${base}es`
   if (VOGAIS_FINAIS.includes(fim)) return `${base}s`
   return base // terminação não coberta: no escuro, não flexiona
+}
+
+// Equivalente em frascos do saldo de um líquido (DEC-053), só para EXIBIÇÃO —
+// o ledger continua em gotas/ml (DEC-052). null quando não há dado suficiente
+// (sólido, ou catálogo sem volume/fator cadastrado). Estimativa: o volume real
+// da gota varia (densidade, técnica de pingar) — por isso o "≈".
+export function fmtFrascosEquivalente(saldo, unidadeDose, volumeFrascoMl, gotasPorMl) {
+  if (unidadeDose !== 'gota' && unidadeDose !== 'ml') return null
+  const vol = Number(volumeFrascoMl)
+  if (!(vol > 0)) return null
+
+  let ml
+  if (unidadeDose === 'gota') {
+    const fator = Number(gotasPorMl)
+    if (!(fator > 0)) return null
+    ml = Number(saldo) / fator
+  } else {
+    ml = Number(saldo)
+  }
+
+  const frascos = ml / vol
+  const frascosFmt = frascos.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+  return `≈ ${frascosFmt} ${frascos >= 0.95 && frascos < 1.05 ? 'frasco' : 'frascos'} de ${fmtQtd(vol)} ml`
+}
+
+// Sugestão de compra em frascos INTEIROS para líquido (estende a DEC-028): a
+// farmácia não vende "380 gotas", vende frasco fechado. Arredonda pra cima.
+export function frascosParaComprar(sugestaoDoseUnit, unidadeDose, volumeFrascoMl, gotasPorMl) {
+  if (sugestaoDoseUnit === null || sugestaoDoseUnit === undefined) return null
+  if (unidadeDose !== 'gota' && unidadeDose !== 'ml') return null
+  const vol = Number(volumeFrascoMl)
+  if (!(vol > 0)) return null
+
+  let ml
+  if (unidadeDose === 'gota') {
+    const fator = Number(gotasPorMl)
+    if (!(fator > 0)) return null
+    ml = Number(sugestaoDoseUnit) / fator
+  } else {
+    ml = Number(sugestaoDoseUnit)
+  }
+  return Math.ceil(ml / vol)
 }
 
 // Rótulo por SUBTIPO do extrato (DEC-036): o ajuste de contagem é entrada ou

@@ -27,7 +27,8 @@ export async function lancarEstoqueInicial(medicamentoId, inicial) {
           p_validade: inicial.validade,
           p_lote: inicial.lote || null,
           p_data: inicial.data || null,
-          p_observacao: 'Estoque inicial (cadastro do medicamento)'
+          p_observacao: 'Estoque inicial (cadastro do medicamento)',
+          p_gotas_por_ml: inicial.gotasPorMl ?? null
         })
       : await supabase.rpc('registrar_ajuste_estoque', {
           p_medicamento_id: medicamentoId,

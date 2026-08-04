@@ -1373,3 +1373,177 @@ vogal com ou sem acento, ou `y`, `+s` → **qualquer outra terminação: como es
 seria um defeito novo: esses cinco pontos ficaram intactos.
 
 **Nada de banco.** Sem migration, sem coluna de plural, sem mexer no cadastro.
+
+---
+
+## DEC-051 — Unidade de dose estruturada, separada do descritor clínico
+**Data:** 2026-08-04 | **Status:** aprovada (Sessão #15)
+
+**Contexto.** `forma_farmaceutica` acumulava dois papéis que só coincidem em
+sólidos: **descritor clínico** (o que a cuidadora lê — "comprimido revestido")
+e **unidade contável** (o que a matemática de estoque usa). Em "solução oral em
+gotas" o descritor é a solução, a dose é a *gota*, o estoque é o *ml* e a
+compra é o *frasco* — três unidades, uma coluna de texto livre. A base real
+tinha, até esta sessão, apenas dois valores (`Comprimido`, `Cápsula`), onde a
+distinção nunca doeu; DEC-050 já registrava essa mesma coluna como texto livre
+sem lista fechada para consultar.
+
+**Decisão.** Novo campo `catalogo_medicamentos.unidade_dose` — lista fechada
+(`comprimido`, `capsula`, `dragea`, `gota`, `ml`, `sache`, `supositorio`,
+`adesivo`, `unidade`) — mais `gotas_por_ml` (sugestão padrão, default de
+exibição 20) e `volume_frasco_ml`, ambos obrigatórios apenas quando a unidade é
+líquida. `forma_farmaceutica` continua o descritor livre; a UI de cadastro
+oferece uma lista fechada de 14 formas com "Outra" (texto livre), cada uma
+mapeada para sua `unidade_dose`. Vive no **catálogo**, não em `medicamentos`
+— propriedade do produto da casa, coerente com a DEC-035.
+
+**Imutabilidade (estende a DEC-026).** Trocar `unidade_dose` de um catálogo já
+usado por um medicamento com administração reinterpretaria retroativamente
+`administracoes.qtd` do histórico. Trigger novo em `catalogo_medicamentos`
+(`fn_catalogo_unidade_dose_imutavel`) bloqueia — a imutabilidade existente em
+`medicamentos` não alcançava essa tabela.
+
+**Migration em base populada.** Primeira migration desta sessão a rodar sobre
+dado real (residentes e histórico já existiam). Colunas nasceram nullable →
+backfill determinístico (`Comprimido`→`comprimido`, `Cápsula`→`capsula`, com
+abort automático se qualquer outro valor aparecesse) → validação → `NOT NULL`.
+Testada em `begin/rollback` antes de aplicar; auditoria pré/pós conferida
+(36 catálogo, 39 medicamentos, 40 horários, 36 lotes, 139 administrações —
+idêntico antes e depois).
+
+**Achado durante a implementação (BUG-009, ver abaixo).** `unidade_dose` NOT
+NULL quebrou `criar_medicamento`/`atualizar_medicamento` no caminho "criar novo
+item de catálogo" — as RPCs inseriam sem esse campo. Corrigido no mesmo dia.
+
+---
+
+## DEC-052 — Ledger na menor unidade da dose para líquidos
+**Data:** 2026-08-04 | **Status:** aprovada (Sessão #15)
+
+**Contexto.** Guardar o saldo em ml quebraria a constraint de múltiplos de 0,5
+na primeira baixa de uma dose em gotas (22 gotas = 1,1 ml) e acumularia erro de
+arredondamento a cada movimento.
+
+**Decisão.** O ledger é sempre gravado na **unidade da dose** — para solução em
+gotas, gotas; um frasco de 10 ml com fator 20 entra como 200 gotas. A conversão
+para ml/frasco vive só nas bordas (entrada de compra e exibição — DEC-053/Parte
+4); nada no meio do sistema converte. `cobertura_dias = saldo ÷ Σ qtd_dose`
+(DEC-027), a baixa FEFO (DEC-040–043), a adesão (DEC-048) e o extrato (DEC-049)
+continuam operando sobre números homogêneos, exatamente como já faziam para
+comprimido — é a mudança de menor superfície possível.
+
+**Precisão numérica alargada.** `numeric(6,2)` (teto 9.999,99) fica justo com
+frascos grandes em gotas — 10 frascos de 20 ml a 20 gotas/ml já são 4.000.
+Alargadas para `numeric(10,2)`: `horarios.qtd_dose`, `medicamentos.estoque_minimo`,
+`administracoes.qtd` (estavam em `numeric(6,2)`) e `lotes_estoque.quantidade_inicial`/
+`saldo_atual`, `movimentacao_lote.quantidade`, `movimentacoes_estoque.quantidade`
+(estas já estavam em `numeric(8,2)`, divergindo do que o planejamento havia
+presumido — auditoria em produção corrigiu a suposição antes de migrar).
+Alargar precisão é lossless em Postgres — mesmo valor, teto maior.
+
+**Efeito colateral técnico.** `ALTER COLUMN TYPE` é bloqueado por triggers com
+cláusula `UPDATE OF <coluna>` (o de `horarios.qtd_dose`, DEC-026) e por views
+que dependem da coluna (`cobertura_estoque`, `saldo_estoque`, `lotes_estoque_vivo`
+— dependem transitivamente de todas as sete). Migration precisou dropar e
+recriar trigger e views em volta do `ALTER`. Validado com hash idêntico de
+`cobertura_estoque` antes/depois (regressão de comprimido zero).
+
+---
+
+## DEC-053 — Fator de conversão gotas/ml congelado no lote
+**Data:** 2026-08-04 | **Status:** aprovada (Sessão #15)
+
+**Contexto.** 20 gotas/ml é referência de farmacopeia, não universal — depende
+da viscosidade e do conta-gotas. Casos reais divergem bastante (Gardenal
+~40 gotas/ml, Pred-Fort ~23). Um fator fixo no código erraria a cobertura de um
+Gardenal em 100%. E se o fator ficasse só no catálogo, editá-lo depois
+reinterpretaria retroativamente quantas gotas cada frasco já comprado tinha —
+o mesmo argumento de imutabilidade da DEC-026, aplicado ao ledger.
+
+**Decisão.** `catalogo_medicamentos.gotas_por_ml` é só a sugestão padrão
+(default de exibição 20, editável no cadastro). O fator **efetivamente usado**
+é copiado para `lotes_estoque.gotas_por_ml` no momento da compra e nunca muda
+ali — cada lote carrega o contexto com que foi calculado, como qualquer entrada
+de ledger imutável no projeto. `registrar_entrada_estoque` e
+`fn_registrar_lote_entrada` ganharam o parâmetro opcional `p_gotas_por_ml`.
+
+**Testado ponta a ponta** (residente de teste, produção): cadastro de solução
+em gotas → compra de 1 frasco de 10 ml a 20 gotas/ml → lote gravado com
+`gotas_por_ml=20.00`, saldo 200 gotas → dose SOS de 15 gotas → baixa FEFO
+correta (saldo 185) → trigger de imutabilidade bloqueou tentativa de editar
+`unidade_dose` do catálogo em uso.
+
+---
+
+## Extensões da Sessão #15 a decisões anteriores
+
+- **DEC-026** (imutabilidade pós-uso) ganha `catalogo_medicamentos.unidade_dose`
+  no rol de campos travados, via trigger próprio (ver DEC-051).
+- **DEC-027** (alerta de reposição) não muda a regra — `saldo < estoque_minimo`
+  continua em gotas/ml para líquido — só a **apresentação** do estoque mínimo
+  passa a aceitar entrada/exibição em frascos quando o fator está completo
+  (Parte 5); o valor canônico gravado é sempre a unidade da dose.
+- **DEC-028** (sugestão de compra: repor para 30 dias) para líquido arredonda
+  para **frascos inteiros** ("comprar 2 frascos"), não em gotas cruas —
+  farmácia não vende fração de frasco. Cobertura de líquido é rotulada como
+  estimativa na tela (o volume real da gota varia com técnica e frasco).
+- **DEC-050** (flexão de forma farmacêutica): os itens da lista fechada da
+  DEC-051 passam a flexionar por **tabela de consulta** (`UNIDADES` em
+  `src/lib/formato.js`), não pela heurística — resolve de vez casos como
+  "comprimido sublingual", que a heurística sempre recusara por ter espaço. A
+  heurística original continua valendo, sem alteração, só para o texto livre
+  de "Outra" (ou quando `unidade_dose` não está disponível).
+
+---
+
+## BUG-008 — `lotes_estoque` ausente em `limpar-banco`
+**Corrigido:** 2026-07-23 (commit `edef8b7`) | **Registrado:** 2026-08-04 (Sessão #15)
+
+**Problema.** `scripts/limpar-banco.js` apagava as tabelas de estoque em ordem
+inversa de FK, mas a lista `TABELAS` não incluía `lotes_estoque` — rodar o
+script contra uma base com lotes cadastrados falhava por violação de FK (ou
+deixava lotes órfãos, a depender da ordem real das constraints).
+
+**Correção.** Adicionada `lotes_estoque` à lista, entre `movimentacoes_estoque`
+e `administracoes` (ordem inversa de dependência, igual ao seed).
+
+**Pendência herdada do go-live** (Sessão #14) que não havia sido registrada em
+`DECISIONS.md`/`ROADMAP.md` até esta sessão.
+
+---
+
+## BUG-009 — `criar_medicamento`/`atualizar_medicamento` sem `unidade_dose` no item novo de catálogo
+**Encontrado e corrigido:** 2026-08-04, mesma sessão (Sessão #15)
+
+**Problema.** A migration da DEC-051 tornou `catalogo_medicamentos.unidade_dose`
+`NOT NULL`. As RPCs `criar_medicamento` e `atualizar_medicamento`, no caminho
+"criar novo item de catálogo" (`p_catalogo_id is null`), inseriam com
+`(nome, dosagem, forma_farmaceutica)` — sem o campo novo. **Todo cadastro de
+medicamento novo por texto livre quebrou em produção** entre a aplicação da
+migration e o hotfix, poucos minutos depois.
+
+**Como foi achado.** Auditoria de código logo após a migration, antes de
+qualquer uso real: as duas RPCs foram lidas de propósito por inserirem em
+`catalogo_medicamentos`, e o `insert` sem a coluna nova saltou aos olhos antes
+que uma cuidadora esbarrasse nele.
+
+**Correção (duas etapas).**
+1. **Hotfix imediato:** as RPCs passaram a gravar `unidade_dose = 'unidade'`
+   — o mesmo bucket seguro reservado para "Outra" — restaurando o cadastro sem
+   violar a constraint nova.
+2. **Correção definitiva (Parte 4):** as RPCs ganharam os parâmetros opcionais
+   `p_unidade_dose`, `p_gotas_por_ml`, `p_volume_frasco_ml`, validados no banco
+   (unidade fora da lista, ou líquido sem fator, retornam erro amigável em vez
+   de estourar a constraint) e alimentados pela lista fechada da UI (DEC-051).
+   `'unidade'` continua sendo o default quando nada é informado.
+
+**Segundo achado no mesmo padrão.** `src/pages/NovoMedicamento.jsx` — o atalho
+"+ Medicamento" da aba Estoque — reusa `FormMedicamento` mas tem sua própria
+chamada a `criar_medicamento`, feita **antes** da correção definitiva acima.
+Ficou order desatualizada e só foi achada testando o cadastro de um líquido
+pela aba Estoque (não pela Gestão de residentes) — o item foi criado com
+`unidade_dose='unidade'` mesmo tendo escolhido "Solução oral em gotas" na
+tela. Corrigida no mesmo formato do call site já certo em
+`GestaoResidentes.jsx`. **Lição:** `FormMedicamento` tem dois call sites
+(`GestaoResidentes.jsx` e `NovoMedicamento.jsx`); mudança de contrato do
+componente exige grep pelos dois, não só pelo mais óbvio.

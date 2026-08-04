@@ -44,7 +44,10 @@ export default function NovoMedicamento({ onVoltar }) {
       p_forma_farmaceutica: valores.forma || null,
       p_posologia: valores.posologia || null,
       p_tipo: valores.tipo,
-      p_estoque_minimo: valores.estoqueMinimo
+      p_estoque_minimo: valores.estoqueMinimo,
+      p_unidade_dose: valores.unidadeDose,
+      p_gotas_por_ml: valores.gotasPorMl,
+      p_volume_frasco_ml: valores.volumeFrascoMl
     })
     if (error) {
       setOcupado(false)
