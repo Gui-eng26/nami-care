@@ -217,6 +217,7 @@ body {
 .formulario textarea,
 .campo-observacao textarea {
   font: inherit;
+  line-height: 1.5;
   padding: 0.625rem 0.75rem;
   border: 1px solid #d6c9ac;
   border-radius: 8px;
@@ -265,12 +266,23 @@ body {
    Global de propósito — protege os modais de validade do estoque, as datas
    do FormMedicamento e o cartão de horário (hora + dose lado a lado), que
    continuam lado a lado. */
+/* BUG-017 — o `appearance: none` acima resolveu a largura intrínseca (BUG-014)
+   mas removeu junto a aparência nativa que sustentava a altura do campo. No
+   WebKit, o conteúdo de `input[type="time"]` vazio (shadow DOM
+   `-webkit-datetime-edit`) não renderiza texto, a altura de conteúdo vai a
+   ~zero e a caixa encolhe para o tamanho do padding — some ao abrir o campo,
+   volta ao normal ao escolher a hora. `min-height` é a soma explícita de
+   linha (`line-height: 1.5` acima) + padding vertical (0.625rem × 2) + bordas
+   (1px × 2): acompanha o padding se ele mudar depois. No Chrome/Android o
+   campo vazio já exibe o marcador `--:--`, então já é igual ou mais alto que
+   o piso — o min-height fica inerte lá. */
 input[type='date'],
 input[type='time'] {
   appearance: none;
   -webkit-appearance: none;
   min-width: 0;
   width: 100%;
+  min-height: calc(1.5em + 1.25rem + 2px);
 }
 
 .formulario .campo-opcao {

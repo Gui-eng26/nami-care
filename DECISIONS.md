@@ -2115,3 +2115,64 @@ leitura do DOM antes e depois do cancelamento. Mensagem de sucesso
 ("Perda registrada. Saldo atual: 0.") testada em `Estoque.jsx`/`ModalPerda`
 e confirmada aparecendo na página depois do modal fechar, sem regressão.
 `Ronda.jsx` e `DoseSos.jsx` não tocados.
+
+---
+
+## BUG-017 — campo de data/hora vazio encolhe em altura no WebKit
+
+**Encontrado:** 2026-08-05, verificação em iPhone real depois da BUG-014/015
+(Sessão #19) | **Corrigido:** 2026-08-05, mesma sessão
+
+**Problema.** `input[type='time']` vazio renderizava com altura menor que o
+mesmo campo preenchido. Ao abrir "Novo medicamento" (pelos dois caminhos —
+gestão de residentes e atalho `+ Medicamento` do estoque), a caixa de
+Horário aparecia achatada; ao escolher a hora, ela assumia a altura correta.
+Combinado com o `margin-top: auto` da BUG-015 (alinhamento pela base), a
+caixa vazia mais baixa deixava um vão visível acima dela.
+
+**Causa raiz.** Efeito colateral direto da BUG-014. O estilo base de
+`.formulario input/select/textarea` não define altura — ela sai de
+`padding + altura do conteúdo`. No WebKit, o conteúdo de um campo de hora é
+renderizado pelo shadow DOM (`-webkit-datetime-edit`); vazio, ele não
+renderiza texto, a altura de conteúdo vai a ~zero e a caixa encolhe para o
+tamanho do padding. Isso não acontecia antes porque o campo usava a
+aparência nativa do iOS, que garante altura mínima própria — o
+`appearance: none` da BUG-014 (necessário para resolver a largura
+intrínseca da BUG-004/BUG-014) removeu junto a estrutura nativa que
+sustentava a altura. A correção de largura criou o problema de altura: a
+mesma classe de defeito da BUG-004/BUG-014 (correção fechada pela metade),
+desta vez na dimensão altura em vez de largura.
+
+**Correção.** `src/index.css`, na raiz (ausência de altura no estilo base),
+não remendando só o `time`: `.formulario input/select/textarea` e
+`.campo-observacao textarea` ganharam `line-height: 1.5`; o bloco de
+`input[type='date']`/`input[type='time']` (BUG-004/BUG-014) ganhou
+`min-height: calc(1.5em + 1.25rem + 2px)` — soma explícita de linha +
+padding vertical (0.625rem × 2) + bordas (1px × 2), que acompanha o padding
+se ele mudar depois. Os quatro campos de Validade que herdam o mesmo
+`appearance: none` (`Estoque.jsx` → `ModalEntrada` e `ModalAjuste`,
+`FormMedicamento.jsx` → estoque inicial, `CampoRecorrencia.jsx` → "A partir
+de") foram conferidos visualmente, não só cobertos pela regra global.
+
+**Nota sobre validação em dois motores.** Até esta sessão a validação
+visual do projeto era feita só em iPhone, mas a maioria da equipe da casa
+usa Android. O product owner testou em Android real (Samsung, Chrome) antes
+desta sessão: o cartão de horário já aparecia com altura e alinhamento
+corretos mesmo com o campo vazio — a BUG-017 é específica do WebKit, porque
+no Chrome o campo de hora vazio exibe o marcador `--:--` (há conteúdo
+renderizado, a caixa não encolhe). Confirma também que o `appearance: none`
+da BUG-014 não removeu a afordância de seletor no Chrome, risco levantado
+no planejamento da BUG-014. Esta é a primeira sessão em que a diferença
+entre os dois motores determinou o diagnóstico — sessões que mexam em
+interface devem conferir nos dois a partir de agora, não com varredura
+completa, mas ao menos nas telas tocadas.
+
+**Testado.** iPhone, 375px: campo de hora vazio com a mesma altura do
+preenchido, nos dois caminhos de "Novo medicamento" e na edição de horário;
+os quatro campos de data vazios, conferidos; alinhamento da BUG-015
+preservado, sem vão. Android/Chrome (verificação por DOM,
+`getBoundingClientRect`/`getComputedStyle`, já que o motor de renderização
+não reproduz o encolhimento do WebKit): campo de horário vazio (43,5px) e
+campo de Validade vazio (43,5px) ambos acima do `min-height` calculado
+(41,5px) — o piso fica inerte, confirmando ausência de regressão em vez de
+presumida.
