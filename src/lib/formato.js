@@ -15,27 +15,11 @@ const FORMAS_EXCECAO = { gel: 'géis' }
 
 const VOGAIS_FINAIS = 'aeiouáâãéêíóôõúy'
 
-// Lista fechada de forma farmacêutica → unidade de dose (DEC-051). O
-// descritor clínico (o que a cuidadora lê) continua livre em
-// `forma_farmaceutica`; esta lista só existe para alimentar o <select> do
-// cadastro e o mapeamento para `unidade_dose`. "Outra" não entra aqui — cai no
-// texto livre, com unidade 'unidade' (fator 1).
-export const FORMAS_CATALOGO = [
-  { rotulo: 'Comprimido', unidadeDose: 'comprimido' },
-  { rotulo: 'Comprimido revestido', unidadeDose: 'comprimido' },
-  { rotulo: 'Comprimido sublingual', unidadeDose: 'comprimido' },
-  { rotulo: 'Comprimido orodispersível', unidadeDose: 'comprimido' },
-  { rotulo: 'Comprimido mastigável', unidadeDose: 'comprimido' },
-  { rotulo: 'Cápsula', unidadeDose: 'capsula' },
-  { rotulo: 'Drágea', unidadeDose: 'dragea' },
-  { rotulo: 'Solução oral em gotas', unidadeDose: 'gota' },
-  { rotulo: 'Xarope', unidadeDose: 'ml' },
-  { rotulo: 'Solução oral', unidadeDose: 'ml' },
-  { rotulo: 'Suspensão oral', unidadeDose: 'ml' },
-  { rotulo: 'Sachê / pó', unidadeDose: 'sache' },
-  { rotulo: 'Supositório', unidadeDose: 'supositorio' },
-  { rotulo: 'Adesivo transdérmico', unidadeDose: 'adesivo' }
-]
+// Lista fechada de forma farmacêutica → unidade de dose: agora vive no banco
+// (tabela `formas_farmaceuticas`, DEC-054), não mais numa constante aqui — só
+// assim o catálogo e a tela nunca divergem sobre o que é "Comprimido" ou
+// "Xarope" (era exatamente essa divergência que causava a BUG-012).
+// `FormMedicamento.jsx` lê a lista direto da tabela.
 
 // unidade_dose (código) → nome da unidade, singular/plural (DEC-051/052). É o
 // que a dose e o saldo mostram quando o medicamento tem catálogo estruturado —

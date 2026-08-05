@@ -1547,3 +1547,365 @@ tela. Corrigida no mesmo formato do call site já certo em
 `GestaoResidentes.jsx`. **Lição:** `FormMedicamento` tem dois call sites
 (`GestaoResidentes.jsx` e `NovoMedicamento.jsx`); mudança de contrato do
 componente exige grep pelos dois, não só pelo mais óbvio.
+
+---
+
+## Regra permanente — sobrecarga de RPC (revisão de assinatura)
+
+**Registrada:** 2026-08-04 (Sessão #16), a partir da BUG-010.
+
+Em Postgres, `create or replace function` com uma **assinatura diferente**
+(parâmetro novo, removido ou de tipo diferente) não substitui a função — cria
+uma **sobrecarga nova**, e a antiga sobrevive. Com duas sobrecargas expostas,
+o PostgREST não consegue escolher a candidata e devolve erro HTTP, que o
+frontend traduz como "Falha de conexão".
+
+**Regra:** toda alteração de assinatura de RPC exige `drop function` explícito
+da assinatura antiga, **e** reconferência pelo app **depois** do
+recarregamento do cache de schema do PostgREST — não imediatamente após
+aplicar a migration. Foi exatamente esse intervalo que fez a BUG-010 passar no
+teste de ponta a ponta da Sessão #15 e só aparecer para a cliente horas
+depois. Vale mesmo quando a mudança é só "aditiva" (parâmetro novo com
+default): o `drop` continua obrigatório, só a compatibilidade com o frontend
+antigo é que muda (ver regra seguinte).
+
+## Regra permanente — migration e deploy são um evento só
+
+**Registrada:** 2026-08-04 (Sessão #16), a partir da BUG-012.
+
+- Migration **aditiva e retrocompatível** (coluna nova nullable, parâmetro novo
+  de RPC **com default**, mantendo nome/posição dos parâmetros antigos) pode
+  ser aplicada antes do deploy do frontend sem risco — o frontend antigo
+  continua funcionando sem mudança (foi o caso da Parte 3 desta sessão:
+  `criar_horario`/`atualizar_horario` ganharam 4 parâmetros de recorrência,
+  todos com default, e o frontend não-atualizado teria continuado a criar
+  horários `diario` normalmente).
+- Migration que **remove ou renomeia** um parâmetro de RPC, ou que torna um
+  campo obrigatório, quebra o frontend antigo — mesmo que a mudança pareça
+  pequena. Aplicar e publicar (commit) na mesma janela; se houver qualquer
+  intervalo, avisar a cuidadora para não cadastrar/editar nada até a
+  confirmação. Foi assim que a BUG-012 aconteceu: banco com schema novo,
+  frontend publicado ainda o antigo, por ~2h.
+- **Nunca destravar um insert quebrado preenchendo valor padrão.** Foi o que o
+  hotfix da BUG-009 fez ao gravar `'unidade'`, e foi o que transformou um erro
+  visível e barato em dado errado silencioso e caro. Diante de um insert que
+  falta campo obrigatório, a resposta correta é falhar de forma explícita.
+
+---
+
+## BUG-010 — sobrecarga duplicada de `registrar_entrada_estoque`
+
+**Encontrada:** aplicada em produção durante o planejamento da Sessão #16
+(migration `20260804181736`, não versionada até esta sessão) | **Versionada e
+documentada:** 2026-08-04 (Sessão #16)
+
+**Problema.** A migration da Sessão #15 acrescentou `p_gotas_por_ml` via
+`create or replace`, deixando duas sobrecargas vivas de
+`registrar_entrada_estoque` e `fn_registrar_lote_entrada`. O PostgREST não
+conseguia escolher e devolvia erro HTTP em **todo** registro de compra — a
+cuidadora ficou sem conseguir lançar estoque por algumas horas.
+
+A mesma migration da Sessão #15 fez o `drop` correspondente em
+`criar_medicamento` (então de 10 parâmetros) e `atualizar_medicamento`. Foi
+omitido só em `registrar_entrada_estoque`/`fn_registrar_lote_entrada`, e foi
+esse esquecimento pontual — não um problema de padrão — que causou o bug.
+
+**Correção.** `drop function` explícito das duas assinaturas de 6/7
+parâmetros; a versão de 7/8 parâmetros (com `p_gotas_por_ml` opcional)
+permanece como única. Migration `20260804181736_bug010_remover_overloads_duplicadas_entrada_estoque.sql`
+versionada nesta sessão (Parte 0) com o conteúdo exato já aplicado em
+produção — nenhuma correção de código pendente.
+
+---
+
+## BUG-011 — erro de RPC renderizado atrás do modal
+
+**Encontrada e corrigida:** 2026-08-04 (Sessão #16, Parte 1)
+
+**Problema.** `.modal-fundo` é `position: fixed; inset: 0; z-index: 10` — um
+overlay cobrindo a tela inteira. Em vários formulários (`Estoque.jsx`,
+`GestaoCuidadoras.jsx`, `GestaoResidentes.jsx`, `FormMedicamento.jsx`), o
+aviso de erro da RPC é estado do componente **pai**, renderizado ANTES do
+modal no JSX mas visualmente **atrás** dele (o modal continua aberto quando a
+RPC falha — só `setModal(null)` no sucesso). Resultado: a cuidadora clica em
+salvar, a chamada falha, nada parece acontecer; só ao cancelar o modal a
+mensagem aparecia. Foi assim que a BUG-010 se manifestou para a cliente.
+
+**Correção.** Auditados todos os modais que chamam RPC no projeto (não só o
+de compra de estoque). `DoseSos.jsx` e `Ronda.jsx` já faziam certo (erro como
+estado local do próprio modal). Corrigidos, com um prop `erroServidor` passado
+do pai e renderizado dentro do modal:
+- `Estoque.jsx` — `ModalEntrada`, `ModalAjuste`, `ModalPerda`
+- `GestaoCuidadoras.jsx` — `FormCuidadora`
+- `GestaoResidentes.jsx` — `FormResidente` (2 call sites), `FormHorario`,
+  `FormMedicamento` (2 call sites)
+- `NovoMedicamento.jsx` — `FormMedicamento`
+
+## BUG-012 — dado real criado na janela entre migration e deploy (Prolopa)
+
+**Ocorrido:** 2026-08-04, ~14:17–15:02 | **Diagnosticado e corrigido:**
+2026-08-04 (Sessão #16, Parte 2, backfill da DEC-054)
+
+**Diagnóstico inicial descartado.** A hipótese de que a cuidadora teria
+escolhido "Outra" e digitado um rótulo já existente na lista não se sustentou:
+o Prolopa foi criado 45 minutos **antes** do commit da Sessão #15
+(`8c8e270`, 15:02) e do deploy subsequente no Railway.
+
+**Causa real.** Janela de ~2h em que o banco de produção já tinha o schema da
+Sessão #15 (com `unidade_dose not null`) e o frontend publicado ainda era o
+antigo, sem o seletor de forma farmacêutica — a tela tinha o campo de texto
+livre da versão anterior. O frontend antigo não enviava `p_unidade_dose`; o
+hotfix da BUG-009 (destravar o insert com o padrão genérico `'unidade'`)
+supriu o valor. Resultado: `Prolopa` com `forma_farmaceutica='Comprimido'` e
+`unidade_dose='unidade'`, com 1 medicamento ativo vinculado e 4 administrações
+reais já registradas quando a inconsistência foi corrigida nesta sessão.
+
+**Correção de dado.** O backfill da migration de `formas_farmaceuticas`
+(DEC-054) casou `forma_farmaceutica='Comprimido'` normalizado (sem
+acento/caixa) contra a tabela nova e setou `forma_id`/`unidade_dose` do
+Prolopa corretamente. Como o catálogo já tinha 4 administrações, a trigger de
+imutabilidade `trg_catalogo_unidade_dose_imutavel` foi **suspensa só para essa
+UPDATE** (mesma transação do backfill, reabilitada logo em seguida) — é uma
+correção de dado ruim introduzido por bug, não uma edição normal, e está
+documentada inline na migration. Conferido após a correção:
+`unidade_dose='comprimido'`, coerente com a forma.
+
+**Endurecimento adicional (BUG-012, item de menor prioridade).** Ao digitar em
+"Outra" na Parte 2/6, o texto é comparado (sem acento/caixa) contra os rótulos
+da lista fechada de `formas_farmaceuticas`; em caso de colisão a tela recusa
+com "Esta forma já está na lista — volte e selecione-a em vez de digitar." Não
+foi a causa da BUG-012 (fecha uma porta lateral, não a que foi usada), mas
+elimina o caminho.
+
+---
+
+## DEC-054 — Catálogo por referência: `formas_farmaceuticas`
+
+**Data:** 2026-08-04 | **Status:** aprovada e implementada (Sessão #16)
+
+**Contexto.** `catalogo_medicamentos.forma_farmaceutica` era texto livre e
+`unidade_dose` uma coluna separada (DEC-051) — nada no banco garantia que as
+duas concordassem. As constraints da Sessão #15 validavam só a coerência
+*interna* da unidade (gota exige `gotas_por_ml`; líquido exige
+`volume_frasco_ml`), nunca a relação forma ↔ unidade. A BUG-012 provou que
+essa não é uma falha hipotética.
+
+**Decisão.** Nova tabela `formas_farmaceuticas` (`id`, `nome` único,
+`unidade_dose`, `plural`, `ordem`, `ativo`), semeada com os 14 itens que antes
+viviam na constante `FORMAS_CATALOGO` (`src/lib/formato.js`, removida —
+`FormMedicamento.jsx` agora lê a lista do banco). "Outra" continua fora da
+lista fechada: cai em texto livre com `unidade_dose` forçado para `'unidade'`.
+
+`catalogo_medicamentos` ganha `forma_id` (FK, nullable) e `ativo` (soft
+delete, DEC-006). `forma_farmaceutica`/`unidade_dose` continuam existindo,
+mas passam a ser **derivados** de `forma_id` por uma trigger
+(`fn_catalogo_derivar_forma`): em insert, ou quando `forma_id` muda, a cópia
+denormalizada é recalculada; se `forma_id` **não** muda mas alguém tenta
+gravar `forma_farmaceutica`/`unidade_dose` divergentes dele, a trigger
+**recusa** (não corrige silenciosamente — testado: `update ... set
+unidade_dose='ml'` num catálogo com `forma_id` de comprimido é rejeitado pelo
+banco). Quando `forma_id` é null, `unidade_dose` é forçado para `'unidade'`.
+
+A trigger de imutabilidade existente (`trg_catalogo_unidade_dose_imutavel`,
+DEC-026/051) não precisou de alteração: como a trigger de derivação roda antes
+dela (ordem alfabética do nome), ela já enxerga o `unidade_dose` final: se o
+backfill de `forma_id` (null → valor) não muda o `unidade_dose` efetivo (caso
+dos ~37 itens já coerentes), a imutabilidade não dispara; se muda (caso do
+Prolopa), dispara — e por isso a correção do Prolopa precisou suspender a
+trigger pontualmente (ver BUG-012).
+
+**Backfill.** Casamento por igualdade normalizada (`extensions.unaccent` +
+`lower`) entre `forma_farmaceutica` e `formas_farmaceuticas.nome`. Um item de
+teste da Sessão #15 (`TESTE Dipirona Gotas`, abandonado, 0 uso real) ficou
+fora do backfill de propósito: sua forma ("Solução oral em gotas") bateria com
+`unidade_dose='gota'`, mas o registro não tinha `gotas_por_ml`/
+`volume_frasco_ml` — os checks de coerência de líquido rejeitariam. Como o
+item vai para `ativo=false` de qualquer forma, ficou sem `forma_id`,
+documentado inline na migration. Os 3 itens `TESTE` (Sessão #15) foram
+marcados `ativo=false` (soft delete).
+
+**RPCs.** `criar_medicamento`/`atualizar_medicamento` trocam `p_unidade_dose`
+por `p_forma_id` (mais `p_forma_farmaceutica` continua existindo, mas só é
+usado quando `p_forma_id` é null — o caminho "Outra"). Assinatura muda
+(BUG-010): `drop function` explícito da versão da Sessão #15 antes de criar a
+nova. **Não é aditivo** — o frontend antigo mandava `p_unidade_dose`, que
+deixou de existir como parâmetro; `FormMedicamento.jsx` e os três call sites
+(`GestaoResidentes.jsx` ×2, `NovoMedicamento.jsx`) mudaram no mesmo commit
+(regra da Parte 0).
+
+**RLS.** Toda tabela nova neste projeto nasce com RLS ligado e sem policy —
+esquecido na primeira aplicação da migration desta parte; o `<select>` de
+forma farmacêutica apareceu vazio no teste manual até a policy
+`formas_farmaceuticas_select_autenticado` (mesmo padrão `select ... to
+authenticated using (true)` de toda tabela de referência do projeto) ser
+adicionada.
+
+**Testado ponta a ponta em produção** (residente de teste): cadastro de novo
+item de catálogo com forma da lista fechada → `forma_id`/`unidade_dose`
+corretos gravados; tentativa de gravar incoerência direto via SQL recusada
+pelo banco; Prolopa com `unidade_dose='comprimido'` após o backfill.
+
+## DEC-055 — Recorrência por horário
+
+**Data:** 2026-08-04 | **Status:** aprovada e implementada (Sessão #16)
+
+**Contexto.** `doses_do_turno` fazia `cross join` de todo horário ativo × todo
+dia do intervalo do turno — frequência sempre diária, implícita (limitação já
+registrada na DEC-027).
+
+**Decisão.** A recorrência vive **no horário** (`horarios.recorrencia_tipo`:
+`diario` | `dias_semana` | `intervalo`), não no medicamento — motivada por um
+caso real do product owner: omeprazol em dias alternados, 8h a cada 2 dias e
+20h a cada 4 dias, com dois horários do mesmo medicamento em ciclos
+diferentes. Um padrão único por medicamento não representaria isso; travar
+todos os horários do mesmo medicamento no mesmo padrão foi cogitado e
+descartado pela mesma razão. Motivo secundário: `horarios` já tem a máquina de
+versionamento da DEC-026 (`atualizar_horario` desativa e recria quando há
+histórico) — se a recorrência morasse em `medicamentos`, mudar o padrão
+reescreveria retroativamente o que era previsto no passado.
+
+Colunas novas: `dias_semana int[]` (1–7 ISO, segunda=1, sem repetição, não
+vazio), `intervalo_dias int` (>1), `data_referencia date` (âncora do ciclo).
+Presença condicional exata por tipo, mesmo padrão das constraints de
+`gotas_por_ml`/`volume_frasco_ml` da Sessão #15. A validação de "sem
+repetição" precisou de uma função auxiliar (`fn_array_sem_repeticao`) porque
+Postgres não aceita subquery direto em `check`. Backfill: todo horário
+existente → `diario` (46 de 46, comportamento idêntico ao de antes).
+
+`doses_do_turno` ganhou o filtro de recorrência no `where` do CTE `slots`,
+calculado no fuso da casa (`fn_fuso_casa()`, já usado ali): `diario` sempre
+gera; `dias_semana` compara `extract(isodow from dia)` com o array; `intervalo`
+calcula `mod(dia - data_referencia, intervalo_dias) = 0` (e `dia >=
+data_referencia`).
+
+`criar_horario`/`atualizar_horario` ganharam os 4 parâmetros, **todos com
+default** (`'diario'`/`null`) — mudança aditiva e retrocompatível (ver regra
+permanente), mas ainda exigiu `drop function` explícito (BUG-010).
+`atualizar_horario` passou a comparar também os campos de recorrência na
+detecção de no-op (senão mudar só a recorrência de um horário sem histórico
+não geraria nem update nem versionamento). `fn_horario_imutavel_apos_uso`
+estendida para travar os 4 campos novos, junto com `hora`/`qtd_dose`, quando o
+horário já tem administrações.
+
+**Testado ponta a ponta:** os três modos (`diario`, `dias_semana` seg/qua/sex,
+`intervalo` a cada 2 dias) via RPC real, com verificação linha a linha da
+geração de dose contra 8 dias de calendário. Validações de erro
+(`dias_semana_invalido`, `dias_semana_repetido`, `intervalo_dias_invalido`,
+`data_referencia_obrigatoria`, `recorrencia_campos_incoerentes`) todas
+conferidas. Caso do omeprazol (8h a cada 2 dias + 20h a cada 4 dias)
+reproduzido e conferido dia a dia contra 10 dias de calendário: bate
+exatamente com a descrição do product owner (dois horários no mesmo dia em
+01/05/09-ago, só o das 8h em 03/07-ago).
+
+## DEC-056 — Cobertura normalizada e alerta por OU
+
+**Data:** 2026-08-04 | **Status:** aprovada e implementada (Sessão #16)
+
+**Contexto.** `cobertura_estoque.doses_por_dia` somava `qtd_dose` de todo
+horário ativo assumindo frequência diária — falso a partir da DEC-055.
+Segundo problema, independente: o alerta de reposição só considerava
+`cobertura_dias < 5`; para um medicamento semanal isso avisa quando resta
+menos de 1 dose — tarde demais.
+
+**Decisão.** Cada horário contribui `qtd_dose × frequência_diária_própria`
+(`diario`→1, `dias_semana`→`cardinality(dias_semana)/7`,
+`intervalo`→`1/intervalo_dias`) para `doses_por_dia`. Confirmado com o caso do
+omeprazol: 0,5/dia (8h) + 0,25/dia (20h) = 0,75/dia exato.
+
+Alerta em OU: `cobertura_dias < LIMIAR_DIAS` **ou** `saldo <= LIMIAR_DOSES`,
+com `LIMIAR_DIAS=5` e `LIMIAR_DOSES=2` como funções nomeadas
+(`fn_limiar_cobertura_dias`, `fn_limiar_doses_restantes`) — não números soltos
+na view — para o product owner calibrar num só lugar. **Nota de
+implementação:** a fórmula do roteiro dizia `doses_restantes < LIMIAR_DOSES`,
+mas o caso de aceitação explícito ("semanal com 2 doses acende, com 3 não")
+só fecha com **`<=`** (2 não é menor que 2) — usado `<=` na implementação
+final. "Doses restantes" = saldo na própria unidade de dose do medicamento;
+coincide com "quantas vezes ainda dá pra administrar" sempre que cada evento
+consome 1 unidade (o caso comum). Para os medicamentos diários (a esmagadora
+maioria da casa) a regra de dias continua acendendo primeiro — sem regressão.
+`sugestao_compra` usa o mesmo denominador normalizado e a mesma condição de
+alerta.
+
+**Testado:** regressão confirmada analiticamente (todo horário pré-existente é
+`diario`, fator 1 — fórmula idêntica à anterior) e numericamente (nenhuma
+mudança em `saldo`/contagens ativas após as migrations). Caso de aceitação
+(semanal, saldo=2 → alerta; saldo=3 → sem alerta) confirmado.
+
+## DEC-057 — Posologia estruturada: critério de uso e observações
+
+**Data:** 2026-08-04 | **Status:** aprovada e implementada (Sessão #16)
+
+**Contexto.** `medicamentos.posologia` guardava duas coisas, nenhuma delas
+posologia: em `continuo`, narração redundante do horário estruturado ("1
+comprimido pela manhã"); em `sos`, o critério clínico de administração ("Se
+dor ou febre") — a informação mais importante da tela de dose SOS.
+
+**Decisão.** `posologia` eliminada como campo de entrada. Novo
+`criterio_uso` — obrigatório quando `tipo='sos'`, nulo quando `tipo='continuo'`
+(constraint `medicamentos_criterio_uso_check`) — exibido em destaque na tela
+de dose SOS (`DoseSos.jsx`, na lista de opções e na confirmação) e no
+formulário de cadastro (só aparece para SOS). Novo `observacoes` — livre, para
+os dois tipos, sempre no fim do formulário. Forma farmacêutica **não** entra
+na posologia — continua vivendo no catálogo (DEC-035/054), composta na
+exibição.
+
+**Migração de dados (auditada nesta sessão, não assumida).** Os 8 registros
+`continuo` com posologia não-nula foram conferidos, um a um, contra
+`horarios`+`catalogo`: **todos** integralmente redundantes, inclusive o caso
+mais complexo (Prolopa, "4 comprimidos ao dia (jejum, manhã, tarde e noite)" ↔
+4 horários ativos de 1 comprimido, 06h/11h/18h/22h). Nenhum caso de
+informação ausente do dado estruturado — descartados sem cópia:
+
+| Medicamento | Posologia descartada |
+|---|---|
+| Cloridrato de Donepezila | 1 comprimido pela manhã |
+| Cloridrato de Memantina | 2 comprimidos pela manhã |
+| Dapaglifozina | 1 comprimido pela manhã |
+| Diosmina | 1 comprimido pela manhã |
+| Melatonina | 1 comprimido a noite |
+| Prolopa | 4 comprimidos ao dia (jejum, manhã, tarde e noite) |
+| Quetiapina | 1 comprimido a noite |
+| Sertralina | 1 comprimido em jejum |
+
+Os 5 registros `sos` reais foram movidos integralmente para `criterio_uso`
+(Cloridrato de Ondansetrona, Cloridrato de Tramadol, Dipirona, Escopolamina
+Composto, Loratadina). 3 itens de teste `sos` inativos, sem posologia,
+receberam placeholder (`'Item de teste — sem critério real definido.'`) só
+para satisfazer a constraint — não afeta uso real.
+
+**RPCs.** `criar_medicamento`/`atualizar_medicamento` trocam `p_posologia`
+por `p_criterio_uso`/`p_observacoes` — **segunda** troca de assinatura destas
+duas funções na mesma sessão (a primeira foi a DEC-054, `forma_id`); `drop
+function` explícito de novo, contra a assinatura pós-DEC-054, não a original
+da Sessão #15. Não é aditivo (remove `p_posologia`) — frontend
+(`FormMedicamento.jsx` e os três call sites) mudou no mesmo commit.
+
+**Testado ponta a ponta em produção:** cadastro de SOS sem `criterio_uso`
+recusado pelo banco (`criterio_uso_obrigatorio`); cadastro com `criterio_uso`
+preenchido gravado corretamente; exibido em destaque na tela de dose SOS
+(confirmado visualmente com os 5 medicamentos SOS reais de Aparecido Corrêa
+de Lima).
+
+---
+
+## Extensões da Sessão #16 a decisões anteriores
+
+- **DEC-026** (imutabilidade pós-uso) ganha os 4 campos de recorrência de
+  `horarios` (DEC-055) no rol de campos travados, no mesmo trigger que já
+  travava `hora`/`qtd_dose`.
+- **DEC-027** (alerta de reposição) tem a regra estendida para OU
+  (cobertura_dias **ou** doses restantes — DEC-056), mantendo comportamento
+  idêntico para o caso diário.
+- **DEC-028** (sugestão de compra: repor para 30 dias) passa a usar o
+  denominador normalizado por recorrência (DEC-056); a lógica de arredondar em
+  frascos inteiros para líquido (DEC-052/053) não mudou.
+- **DEC-035** (catálogo por seleção humana) ganha a referência estrutural da
+  DEC-054: a seleção agora aponta para `forma_id`, não só para o item de
+  catálogo.
+- **DEC-050** (flexão de forma farmacêutica): a lista fechada que alimentava a
+  heurística saiu de `FORMAS_CATALOGO` (constante) para `formas_farmaceuticas`
+  (tabela) — mesmo comportamento, fonte diferente.
+- **DEC-051** (unidade de dose estruturada) ganha a referência por FK da
+  DEC-054: `unidade_dose` deixa de ser gravável diretamente quando há
+  `forma_id`, e passa a ser recusada em caso de divergência, não só imutável
+  pós-uso.

@@ -42,10 +42,11 @@ export default function NovoMedicamento({ onVoltar }) {
       p_nome: valores.nome,
       p_dosagem: valores.dosagem || null,
       p_forma_farmaceutica: valores.forma || null,
-      p_posologia: valores.posologia || null,
+      p_criterio_uso: valores.criterioUso || null,
+      p_observacoes: valores.observacoes || null,
       p_tipo: valores.tipo,
       p_estoque_minimo: valores.estoqueMinimo,
-      p_unidade_dose: valores.unidadeDose,
+      p_forma_id: valores.formaId,
       p_gotas_por_ml: valores.gotasPorMl,
       p_volume_frasco_ml: valores.volumeFrascoMl
     })
@@ -136,6 +137,7 @@ export default function NovoMedicamento({ onVoltar }) {
               : `Para ${residente.nome}`
           }
           ocupado={ocupado}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setResidente(null)}
           onSalvar={salvar}
         />

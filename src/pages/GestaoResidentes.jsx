@@ -5,8 +5,14 @@ import { fmtForma, fmtFrascosEquivalente } from '../lib/formato.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
 import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
+import { proximosDias, geraDoseNoDia, fmtDiaCurto, fmtDiaSemanaCurto, DIAS_SEMANA } from '../lib/recorrencia.js'
 
 const ROTULO_TIPO = { continuo: 'Contínuo', sos: 'SOS' }
+const FUSO = 'America/Sao_Paulo'
+
+function hojeLocal() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: FUSO })
+}
 
 function dataLocal(iso) {
   if (!iso) return null
@@ -158,6 +164,7 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
       {form && (
         <FormResidente
           ocupado={ocupado}
+          erroServidor={aviso}
           onFechar={() => setForm(false)}
           onSalvar={criar}
         />
@@ -176,7 +183,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
   // catalogo:catalogo_medicamentos(...) embute a unidade estruturada (DEC-051)
   // do produto — sem isso os rótulos de dose caem no fallback de sempre.
   const SELECT_MEDICAMENTO =
-    'id, catalogo_id, nome, dosagem, forma_farmaceutica, posologia, tipo, ativo, estoque_minimo, catalogo:catalogo_medicamentos(unidade_dose, gotas_por_ml, volume_frasco_ml)'
+    'id, catalogo_id, nome, dosagem, forma_farmaceutica, criterio_uso, observacoes, tipo, ativo, estoque_minimo, catalogo:catalogo_medicamentos(unidade_dose, gotas_por_ml, volume_frasco_ml)'
 
   const carregarMedicamentos = useCallback(async () => {
     const { data, error } = await supabase
@@ -299,7 +306,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
                 <span className="item-gestao-nome">
                   {m.nome} {m.dosagem}
                   <span className="item-gestao-detalhe">
-                    {[m.forma_farmaceutica, m.posologia].filter(Boolean).join(' — ')}
+                    {[m.forma_farmaceutica, m.criterio_uso].filter(Boolean).join(' — ')}
                   </span>
                 </span>
                 <span className="item-gestao-chips">
@@ -339,6 +346,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
         <FormResidente
           residente={residente}
           ocupado={ocupado}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
             const r = await chamarRpc('atualizar_residente', {
@@ -366,10 +374,11 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
               p_nome: valores.nome,
               p_dosagem: valores.dosagem || null,
               p_forma_farmaceutica: valores.forma || null,
-              p_posologia: valores.posologia || null,
+              p_forma_id: valores.formaId,
+              p_criterio_uso: valores.criterioUso || null,
+              p_observacoes: valores.observacoes || null,
               p_tipo: valores.tipo,
               p_estoque_minimo: valores.estoqueMinimo,
-              p_unidade_dose: valores.unidadeDose,
               p_gotas_por_ml: valores.gotasPorMl,
               p_volume_frasco_ml: valores.volumeFrascoMl
             })
@@ -406,7 +415,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
   const carregarHorarios = useCallback(async () => {
     const { data, error } = await supabase
       .from('horarios')
-      .select('id, hora, qtd_dose, ativo')
+      .select('id, hora, qtd_dose, ativo, recorrencia_tipo, dias_semana, intervalo_dias, data_referencia')
       .eq('medicamento_id', medicamento.id)
       .order('ativo', { ascending: false })
       .order('hora')
@@ -457,11 +466,12 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
         {[
           ROTULO_TIPO[medicamento.tipo],
           medicamento.forma_farmaceutica,
-          medicamento.posologia
+          medicamento.criterio_uso
         ]
           .filter(Boolean)
           .join(' — ')}
       </p>
+      {medicamento.observacoes && <p className="estoque-rotulo">{medicamento.observacoes}</p>}
 
       {aviso && (
         <p className={`aviso ${aviso.tipo === 'ok' ? 'aviso-ok' : 'aviso-erro'}`}>
@@ -582,6 +592,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
           medicamento={medicamento}
           daCasa={residente.eh_sentinela}
           ocupado={ocupado}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
             const r = await chamarRpc('atualizar_medicamento', {
@@ -590,10 +601,11 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
               p_nome: valores.nome,
               p_dosagem: valores.dosagem || null,
               p_forma_farmaceutica: valores.forma || null,
-              p_posologia: valores.posologia || null,
+              p_forma_id: valores.formaId,
+              p_criterio_uso: valores.criterioUso || null,
+              p_observacoes: valores.observacoes || null,
               p_tipo: valores.tipo,
               p_estoque_minimo: valores.estoqueMinimo,
-              p_unidade_dose: valores.unidadeDose,
               p_gotas_por_ml: valores.gotasPorMl,
               p_volume_frasco_ml: valores.volumeFrascoMl
             })
@@ -607,21 +619,23 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
       {form?.modo === 'horario' && (
         <FormHorario
           horario={form.horario}
+          horariosExistentes={horarios?.filter((h) => h.ativo && h.id !== form.horario?.id) ?? []}
           rotuloUnidade={fmtForma(2, medicamento.forma_farmaceutica, medicamento.catalogo?.unidade_dose)}
           ocupado={ocupado}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
+            const params = {
+              p_hora: valores.hora,
+              p_qtd_dose: valores.qtdDose,
+              p_recorrencia_tipo: valores.recorrenciaTipo,
+              p_dias_semana: valores.diasSemana,
+              p_intervalo_dias: valores.intervaloDias,
+              p_data_referencia: valores.dataReferencia
+            }
             const r = form.horario
-              ? await chamarRpc('atualizar_horario', {
-                  p_horario_id: form.horario.id,
-                  p_hora: valores.hora,
-                  p_qtd_dose: valores.qtdDose
-                })
-              : await chamarRpc('criar_horario', {
-                  p_medicamento_id: medicamento.id,
-                  p_hora: valores.hora,
-                  p_qtd_dose: valores.qtdDose
-                })
+              ? await chamarRpc('atualizar_horario', { p_horario_id: form.horario.id, ...params })
+              : await chamarRpc('criar_horario', { p_medicamento_id: medicamento.id, ...params })
             if (r) {
               setForm(null)
               if (r.versionado) {
@@ -640,7 +654,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
   )
 }
 
-function FormResidente({ residente, ocupado, onFechar, onSalvar }) {
+function FormResidente({ residente, ocupado, erroServidor, onFechar, onSalvar }) {
   const [nome, setNome] = useState(residente?.nome ?? '')
   const [nascimento, setNascimento] = useState(residente?.nascimento ?? '')
   const [observacoes, setObservacoes] = useState(residente?.observacoes ?? '')
@@ -672,6 +686,7 @@ function FormResidente({ residente, ocupado, onFechar, onSalvar }) {
               onChange={(e) => setObservacoes(e.target.value)}
             />
           </label>
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar
@@ -686,21 +701,72 @@ function FormResidente({ residente, ocupado, onFechar, onSalvar }) {
   )
 }
 
-function FormHorario({ horario, rotuloUnidade, ocupado, onFechar, onSalvar }) {
+function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado, erroServidor, onFechar, onSalvar }) {
   const [hora, setHora] = useState(horario ? horario.hora.slice(0, 5) : '')
   const [qtdDose, setQtdDose] = useState(horario ? String(Number(horario.qtd_dose)) : '1')
+  // Recorrência (DEC-055): diario (padrão, comportamento de sempre) |
+  // dias_semana | intervalo.
+  const [recorrenciaTipo, setRecorrenciaTipo] = useState(horario?.recorrencia_tipo ?? 'diario')
+  const [diasSemana, setDiasSemana] = useState(horario?.dias_semana ?? [])
+  const [intervaloDias, setIntervaloDias] = useState(
+    horario?.intervalo_dias != null ? String(horario.intervalo_dias) : '2'
+  )
+  const [dataReferencia, setDataReferencia] = useState(horario?.data_referencia ?? hojeLocal())
+  const [erro, setErro] = useState(null)
+
+  function alternarDiaSemana(valor) {
+    setDiasSemana((lista) =>
+      lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor].sort()
+    )
+  }
+
+  // Prévia de conferência (Parte 6): próximos 14 dias, considerando TODOS os
+  // horários ativos do medicamento juntos — é a visão que corresponde ao
+  // modelo mental da cuidadora ("neste dia, duas doses"), não só este horário
+  // isolado. O rascunho em edição entra com os valores ainda não salvos.
+  const dias = proximosDias(14)
+  const rascunho = {
+    hora,
+    recorrencia_tipo: recorrenciaTipo,
+    dias_semana: recorrenciaTipo === 'dias_semana' ? diasSemana : null,
+    intervalo_dias: recorrenciaTipo === 'intervalo' ? Number(intervaloDias) : null,
+    data_referencia: recorrenciaTipo === 'intervalo' ? dataReferencia : null
+  }
+  const horariosPreview = [...horariosExistentes, rascunho]
+  const previewPorDia = dias.map((dia) => ({
+    dia,
+    horas: horariosPreview
+      .filter((h) => h.hora && geraDoseNoDia(h, dia))
+      .map((h) => h.hora.slice(0, 5))
+      .sort()
+  }))
+
+  function submeter(e) {
+    e.preventDefault()
+    setErro(null)
+    if (recorrenciaTipo === 'dias_semana' && diasSemana.length === 0) {
+      setErro('Selecione ao menos um dia da semana.')
+      return
+    }
+    if (recorrenciaTipo === 'intervalo' && !(Number(intervaloDias) > 1)) {
+      setErro('O intervalo deve ser maior que 1 dia.')
+      return
+    }
+    onSalvar({
+      hora,
+      qtdDose: Number(qtdDose),
+      recorrenciaTipo,
+      diasSemana: recorrenciaTipo === 'dias_semana' ? diasSemana : null,
+      intervaloDias: recorrenciaTipo === 'intervalo' ? Number(intervaloDias) : null,
+      dataReferencia: recorrenciaTipo === 'intervalo' ? dataReferencia : null
+    })
+  }
 
   return (
     <div className="modal-fundo" onClick={onFechar}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{horario ? `Editar horário ${horario.hora.slice(0, 5)}` : 'Novo horário'}</h3>
-        <form
-          className="formulario"
-          onSubmit={(e) => {
-            e.preventDefault()
-            onSalvar({ hora, qtdDose: Number(qtdDose) })
-          }}
-        >
+        <form className="formulario" onSubmit={submeter}>
           <div className="formulario-linha">
             <label>
               Horário
@@ -719,6 +785,77 @@ function FormHorario({ horario, rotuloUnidade, ocupado, onFechar, onSalvar }) {
               />
             </label>
           </div>
+
+          <label>
+            Repetição
+            <select value={recorrenciaTipo} onChange={(e) => setRecorrenciaTipo(e.target.value)}>
+              <option value="diario">Todo dia</option>
+              <option value="dias_semana">Dias da semana</option>
+              <option value="intervalo">A cada N dias</option>
+            </select>
+          </label>
+
+          {recorrenciaTipo === 'dias_semana' && (
+            <div className="dias-semana-selecao">
+              {DIAS_SEMANA.map((d) => (
+                <button
+                  key={d.valor}
+                  type="button"
+                  className={`dia-semana-opcao ${diasSemana.includes(d.valor) ? 'dia-semana-ativo' : ''}`}
+                  onClick={() => alternarDiaSemana(d.valor)}
+                >
+                  {d.curto}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {recorrenciaTipo === 'intervalo' && (
+            <div className="formulario-linha">
+              <label>
+                A cada quantos dias
+                <input
+                  type="number"
+                  min="2"
+                  step="1"
+                  inputMode="numeric"
+                  value={intervaloDias}
+                  onChange={(e) => setIntervaloDias(e.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                A partir de
+                <input
+                  type="date"
+                  value={dataReferencia}
+                  onChange={(e) => setDataReferencia(e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+          )}
+
+          {/* Calendário de conferência: a cuidadora não precisa entender o
+              modelo de recorrência, só olhar e reconhecer "é isso mesmo". */}
+          <div className="calendario-conferencia">
+            <span className="catalogo-rotulo">Próximos dias (conferência)</span>
+            <ul className="calendario-lista">
+              {previewPorDia.map(({ dia, horas }) => (
+                <li key={dia.toISOString()} className="calendario-dia">
+                  <span className="calendario-dia-data">
+                    {fmtDiaSemanaCurto(dia)} {fmtDiaCurto(dia)}
+                  </span>
+                  <span className="calendario-dia-horas">
+                    {horas.length > 0 ? horas.join(' · ') : '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {erro && <p className="aviso aviso-erro">{erro}</p>}
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar

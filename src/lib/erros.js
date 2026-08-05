@@ -17,6 +17,8 @@ const MENSAGENS = {
   medicamento_com_historico:
     'Medicamento com administrações registradas: não dá para trocar o remédio. Desative-o e cadastre a nova versão.',
   catalogo_nao_encontrado: 'Item do catálogo não encontrado. Recarregue e tente de novo.',
+  forma_nao_encontrada: 'Forma farmacêutica não encontrada ou desativada. Recarregue e tente de novo.',
+  criterio_uso_obrigatorio: 'Informe quando administrar (critério de uso do SOS).',
   medicamento_sos: 'Medicamento SOS não tem horários fixos.',
   // Medicamento da casa e dose SOS reestruturada (Sessão #12 — DEC-044/047).
   residente_da_casa_fixo:

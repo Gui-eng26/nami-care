@@ -462,6 +462,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'entrada' && (
         <ModalEntrada
           item={item}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setModal(null)}
           onSalvar={(valores) =>
             chamarRpc(
@@ -483,6 +484,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'ajuste' && (
         <ModalAjuste
           item={item}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setModal(null)}
           onSalvar={(valores) =>
             chamarRpc(
@@ -505,6 +507,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'perda' && (
         <ModalPerda
           item={item}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setModal(null)}
           onSalvar={(valores) =>
             chamarRpc(
@@ -523,7 +526,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
   )
 }
 
-function ModalEntrada({ item, onFechar, onSalvar }) {
+function ModalEntrada({ item, erroServidor, onFechar, onSalvar }) {
   // Líquido compra-se em frasco fechado, não em gotas soltas (Parte 4). O
   // sólido continua digitando a quantidade direto, como sempre.
   const liquido = item.unidade_dose === 'gota' || item.unidade_dose === 'ml'
@@ -699,6 +702,7 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
               onChange={(e) => setObservacao(e.target.value)}
             />
           </label>
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={salvando}>
               Cancelar
@@ -713,7 +717,7 @@ function ModalEntrada({ item, onFechar, onSalvar }) {
   )
 }
 
-function ModalAjuste({ item, onFechar, onSalvar }) {
+function ModalAjuste({ item, erroServidor, onFechar, onSalvar }) {
   const [contada, setContada] = useState('')
   const [lote, setLote] = useState('')
   const [validade, setValidade] = useState('')
@@ -801,6 +805,7 @@ function ModalAjuste({ item, onFechar, onSalvar }) {
               onChange={(e) => setObservacao(e.target.value)}
             />
           </label>
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={salvando}>
               Cancelar
@@ -815,7 +820,7 @@ function ModalAjuste({ item, onFechar, onSalvar }) {
   )
 }
 
-function ModalPerda({ item, onFechar, onSalvar }) {
+function ModalPerda({ item, erroServidor, onFechar, onSalvar }) {
   const [quantidade, setQuantidade] = useState('')
   const [motivo, setMotivo] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -860,6 +865,7 @@ function ModalPerda({ item, onFechar, onSalvar }) {
               required
             />
           </label>
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={salvando}>
               Cancelar

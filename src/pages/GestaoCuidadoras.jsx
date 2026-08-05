@@ -144,6 +144,7 @@ export default function GestaoCuidadoras({ credencial }) {
         <FormCuidadora
           form={form}
           ocupado={ocupado}
+          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
           onFechar={() => setForm(null)}
           onSalvar={async (valores) => {
             let r
@@ -177,7 +178,7 @@ export default function GestaoCuidadoras({ credencial }) {
   )
 }
 
-function FormCuidadora({ form, ocupado, onFechar, onSalvar }) {
+function FormCuidadora({ form, ocupado, erroServidor, onFechar, onSalvar }) {
   const editando = form.modo === 'editar'
   const soPin = form.modo === 'pin'
   const [nome, setNome] = useState(editando ? form.cuidadora.nome : '')
@@ -232,6 +233,7 @@ function FormCuidadora({ form, ocupado, onFechar, onSalvar }) {
               Administradora (acessa a gestão)
             </label>
           )}
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar

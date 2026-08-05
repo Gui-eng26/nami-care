@@ -544,6 +544,22 @@ input[type='date'] {
   font-size: 0.8125rem;
 }
 
+/* Critério de uso do SOS (DEC-057): "quando administrar" é a informação mais
+   importante da tela no momento da dose avulsa — precisa se destacar do
+   resto, não só mais uma linha cinza. */
+.criterio-uso-destaque {
+  display: block;
+  font-weight: 600;
+  color: var(--cor-primaria-texto);
+}
+
+p.criterio-uso-destaque {
+  padding: 0.5rem 0.75rem;
+  background: var(--cor-alerta-fundo);
+  border-radius: 8px;
+  font-size: 0.9375rem;
+}
+
 .secao-encerrar {
   display: flex;
   flex-direction: column;
@@ -627,6 +643,69 @@ input[type='date'] {
 
 .modal-acoes .botao-primario {
   flex: 1;
+}
+
+/* ---- recorrência de horário (Sessão #16 — DEC-055) ---- */
+
+.dias-semana-selecao {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+}
+
+.dia-semana-opcao {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.dia-semana-ativo {
+  border-color: var(--cor-primaria-escura);
+  background: #f7efdd;
+}
+
+.calendario-conferencia {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.calendario-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+}
+
+.calendario-dia {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--cor-borda);
+  font-size: 0.8125rem;
+}
+
+.calendario-dia:last-child {
+  border-bottom: none;
+}
+
+.calendario-dia-data {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.calendario-dia-horas {
+  color: var(--cor-texto-suave);
+  text-align: right;
 }
 
 /* ---- estoque (Sessão #4) ---- */

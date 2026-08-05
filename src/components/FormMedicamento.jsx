@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { FORMAS_CATALOGO, fmtForma } from '../lib/formato.js'
+import { fmtForma } from '../lib/formato.js'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -15,11 +15,21 @@ function rotuloCatalogo(item) {
   return `${item.nome}${dose}${forma}`
 }
 
+// Sem acento/caixa, para comparar o texto livre de "Outra" com a lista
+// fechada (BUG-012): "Comprimido" e "comprimido" são o mesmo rótulo.
+function normalizarForma(texto) {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 // Cadastro/edição de medicamento (DEC-035): nome/dosagem/forma vêm do CATÁLOGO
 // da casa (entidade compartilhada), nunca de texto livre na tela do residente —
 // editar por texto mudaria o remédio de todos os residentes vinculados ao item.
 // O medicamento é a) selecionar um item existente (busca por nome) ou b) criar
-// um item novo do catálogo. posologia/tipo/estoque_minimo continuam por
+// um item novo do catálogo. criterio_uso/observacoes/tipo/estoque_minimo continuam por
 // residente e sempre editáveis.
 //
 // No CADASTRO (não na edição) há ainda o estoque inicial opcional da Sessão #8
@@ -44,6 +54,7 @@ export default function FormMedicamento({
   daCasa = false,
   subtitulo,
   ocupado,
+  erroServidor,
   onFechar,
   onSalvar
 }) {
@@ -68,8 +79,20 @@ export default function FormMedicamento({
   const [modo, setModo] = useState(medicamento ? 'escolhido' : 'buscar')
   const [termo, setTermo] = useState('')
   const [resultados, setResultados] = useState([])
-  // Forma farmacêutica de item novo (DEC-051): lista fechada + "Outra" (texto
-  // livre). formaEscolha guarda o rótulo escolhido, ou 'outra'.
+  // Lista fechada de forma farmacêutica (DEC-054): vem do banco
+  // (formas_farmaceuticas), não mais de uma constante no cliente — só assim o
+  // catálogo e a tela nunca divergem sobre o que é "Comprimido" ou "Xarope".
+  const [formas, setFormas] = useState([])
+  useEffect(() => {
+    supabase
+      .from('formas_farmaceuticas')
+      .select('id, nome, unidade_dose')
+      .eq('ativo', true)
+      .order('ordem')
+      .then(({ data, error }) => setFormas(error ? [] : data))
+  }, [])
+  // Forma farmacêutica de item novo: lista fechada (formaEscolha = id de
+  // formas_farmaceuticas) + "Outra" (texto livre, formaEscolha = 'outra').
   const [novo, setNovo] = useState({
     nome: '',
     dosagem: '',
@@ -81,9 +104,9 @@ export default function FormMedicamento({
   const [erroCatalogo, setErroCatalogo] = useState(null)
 
   // Derivados da escolha de forma no modo 'novo'.
-  const formaFechadaNovo = FORMAS_CATALOGO.find((f) => f.rotulo === novo.formaEscolha)
-  const unidadeDoseNovo = novo.formaEscolha === '' ? null : formaFechadaNovo ? formaFechadaNovo.unidadeDose : 'unidade'
-  const formaFinalNovo = novo.formaEscolha === 'outra' ? novo.formaLivre.trim() : novo.formaEscolha
+  const formaFechadaNovo = formas.find((f) => f.id === novo.formaEscolha)
+  const unidadeDoseNovo = novo.formaEscolha === '' ? null : formaFechadaNovo ? formaFechadaNovo.unidade_dose : 'unidade'
+  const formaFinalNovo = novo.formaEscolha === 'outra' ? novo.formaLivre.trim() : (formaFechadaNovo?.nome ?? '')
   const precisaGotasNovo = unidadeDoseNovo === 'gota'
   const precisaVolumeNovo = unidadeDoseNovo === 'gota' || unidadeDoseNovo === 'ml'
 
@@ -104,7 +127,11 @@ export default function FormMedicamento({
   const fatorMlPorFrasco = () =>
     Number(volumeFrascoMlAtual) * (unidadeAtual === 'gota' ? Number(gotasPorMlAtual) : 1)
 
-  const [posologia, setPosologia] = useState(medicamento?.posologia ?? '')
+  // Posologia estruturada (DEC-057): criterio_uso é exclusivo de SOS
+  // ("Quando administrar" — o que decide a dose avulsa); observacoes é livre,
+  // para os dois tipos.
+  const [criterioUso, setCriterioUso] = useState(medicamento?.criterio_uso ?? '')
+  const [observacoes, setObservacoes] = useState(medicamento?.observacoes ?? '')
   const [tipo, setTipo] = useState(daCasa ? 'sos' : medicamento?.tipo ?? 'continuo')
   // Sempre canônico (unidade da dose — DEC-027), igual ao que a RPC espera. Em
   // líquido com fator completo, o CAMPO exibe frascos (Parte 5); a conversão é
@@ -148,6 +175,7 @@ export default function FormMedicamento({
     supabase
       .from('catalogo_medicamentos')
       .select('id, nome, dosagem, forma_farmaceutica, unidade_dose, gotas_por_ml, volume_frasco_ml')
+      .eq('ativo', true)
       .ilike('nome', `%${t}%`)
       .order('nome')
       .limit(15)
@@ -171,7 +199,7 @@ export default function FormMedicamento({
     let nome = ''
     let dosagem = ''
     let forma = ''
-    let unidadeDose = null
+    let formaId = null
     let gotasPorMl = null
     let volumeFrascoMl = null
     if (modo === 'escolhido' && catalogo?.id) {
@@ -180,6 +208,7 @@ export default function FormMedicamento({
       nome = novo.nome.trim()
       dosagem = novo.dosagem.trim()
       forma = formaFinalNovo
+      formaId = novo.formaEscolha === 'outra' ? null : (formaFechadaNovo?.id ?? null)
       if (nome === '') {
         setErroCatalogo('Informe o nome do medicamento.')
         return
@@ -188,7 +217,13 @@ export default function FormMedicamento({
         setErroCatalogo('Informe a forma farmacêutica, ou volte e escolha uma da lista.')
         return
       }
-      unidadeDose = unidadeDoseNovo
+      if (
+        novo.formaEscolha === 'outra' &&
+        formas.some((f) => normalizarForma(f.nome) === normalizarForma(forma))
+      ) {
+        setErroCatalogo('Esta forma já está na lista — volte e selecione-a em vez de digitar.')
+        return
+      }
       if (precisaGotasNovo && !(Number(novo.gotasPorMl) > 0)) {
         setErroCatalogo('Informe quantas gotas tem 1 ml (confira na bula — 20 é só sugestão).')
         return
@@ -224,16 +259,24 @@ export default function FormMedicamento({
       }
     }
 
+    // Critério de uso é obrigatório em SOS (DEC-057) — é o que decide a dose
+    // avulsa; sem ele a tela de dose SOS fica sem a informação mais importante.
+    if (tipo === 'sos' && criterioUso.trim() === '') {
+      setErroCatalogo('Informe quando administrar (ex.: "Se dor ou febre").')
+      return
+    }
+
     onSalvar({
       catalogoId,
       nome,
       dosagem,
       forma,
-      // Só usados quando catalogoId é null (item novo de catálogo — DEC-051).
-      unidadeDose,
+      // Só usados quando catalogoId é null (item novo de catálogo — DEC-054).
+      formaId,
       gotasPorMl,
       volumeFrascoMl,
-      posologia: posologia.trim(),
+      criterioUso: tipo === 'sos' ? criterioUso.trim() : null,
+      observacoes: observacoes.trim(),
       tipo,
       // Estoque mínimo só faz sentido para SOS (DEC-027).
       estoqueMinimo: tipo === 'sos' && estoqueMinimo !== '' ? Number(estoqueMinimo) : null,
@@ -362,9 +405,9 @@ export default function FormMedicamento({
                       onChange={(e) => setNovo((n) => ({ ...n, formaEscolha: e.target.value }))}
                     >
                       <option value="">— selecione —</option>
-                      {FORMAS_CATALOGO.map((f) => (
-                        <option key={f.rotulo} value={f.rotulo}>
-                          {f.rotulo}
+                      {formas.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome}
                         </option>
                       ))}
                       <option value="outra">Outra (especificar)</option>
@@ -428,10 +471,6 @@ export default function FormMedicamento({
             {erroCatalogo && <p className="aviso aviso-erro">{erroCatalogo}</p>}
           </div>
 
-          <label>
-            Posologia (orientação)
-            <textarea rows={2} value={posologia} onChange={(e) => setPosologia(e.target.value)} />
-          </label>
           {daCasa ? (
             <p className="card-sos">
               Medicamento da casa é sempre <strong>SOS</strong> (dose avulsa):
@@ -444,6 +483,21 @@ export default function FormMedicamento({
                 <option value="continuo">Contínuo (com horários de ronda)</option>
                 <option value="sos">SOS (dose avulsa, sem horários)</option>
               </select>
+            </label>
+          )}
+          {tipo === 'sos' && (
+            <label>
+              Quando administrar
+              <textarea
+                rows={2}
+                placeholder="ex.: Se dor ou febre"
+                value={criterioUso}
+                onChange={(e) => setCriterioUso(e.target.value)}
+                required
+              />
+              <span className="bloco-explicacao">
+                O critério que decide a dose avulsa — aparece em destaque na tela de dose SOS.
+              </span>
             </label>
           )}
           {tipo === 'sos' && (
@@ -595,6 +649,12 @@ export default function FormMedicamento({
             </div>
           )}
 
+          <label>
+            Observações (opcional)
+            <textarea rows={2} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+          </label>
+
+          {erroServidor && <p className="aviso aviso-erro">{erroServidor}</p>}
           <div className="modal-acoes">
             <button type="button" className="botao-secundario" onClick={onFechar} disabled={ocupado}>
               Cancelar
