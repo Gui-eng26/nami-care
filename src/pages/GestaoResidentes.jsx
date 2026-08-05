@@ -5,7 +5,8 @@ import { fmtForma, fmtFrascosEquivalente } from '../lib/formato.js'
 import { lancarEstoqueInicial } from '../lib/estoqueInicial.js'
 import { criarHorariosIniciais } from '../lib/horariosIniciais.js'
 import FormMedicamento from '../components/FormMedicamento.jsx'
-import { proximosDias, geraDoseNoDia, fmtDiaCurto, fmtDiaSemanaCurto, DIAS_SEMANA } from '../lib/recorrencia.js'
+import CampoRecorrencia, { erroRecorrencia } from '../components/CampoRecorrencia.jsx'
+import { proximosDias, geraDoseNoDia, fmtDiaCurto, fmtDiaSemanaCurto } from '../lib/recorrencia.js'
 
 const ROTULO_TIPO = { continuo: 'Contínuo', sos: 'SOS' }
 const FUSO = 'America/Sao_Paulo'
@@ -714,12 +715,6 @@ function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado,
   const [dataReferencia, setDataReferencia] = useState(horario?.data_referencia ?? hojeLocal())
   const [erro, setErro] = useState(null)
 
-  function alternarDiaSemana(valor) {
-    setDiasSemana((lista) =>
-      lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor].sort()
-    )
-  }
-
   // Prévia de conferência (Parte 6): próximos 14 dias, considerando TODOS os
   // horários ativos do medicamento juntos — é a visão que corresponde ao
   // modelo mental da cuidadora ("neste dia, duas doses"), não só este horário
@@ -744,12 +739,9 @@ function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado,
   function submeter(e) {
     e.preventDefault()
     setErro(null)
-    if (recorrenciaTipo === 'dias_semana' && diasSemana.length === 0) {
-      setErro('Selecione ao menos um dia da semana.')
-      return
-    }
-    if (recorrenciaTipo === 'intervalo' && !(Number(intervaloDias) > 1)) {
-      setErro('O intervalo deve ser maior que 1 dia.')
+    const erroRec = erroRecorrencia({ recorrenciaTipo, diasSemana, intervaloDias })
+    if (erroRec) {
+      setErro(erroRec)
       return
     }
     onSalvar({
@@ -786,55 +778,16 @@ function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado,
             </label>
           </div>
 
-          <label>
-            Repetição
-            <select value={recorrenciaTipo} onChange={(e) => setRecorrenciaTipo(e.target.value)}>
-              <option value="diario">Todo dia</option>
-              <option value="dias_semana">Dias da semana</option>
-              <option value="intervalo">A cada N dias</option>
-            </select>
-          </label>
-
-          {recorrenciaTipo === 'dias_semana' && (
-            <div className="dias-semana-selecao">
-              {DIAS_SEMANA.map((d) => (
-                <button
-                  key={d.valor}
-                  type="button"
-                  className={`dia-semana-opcao ${diasSemana.includes(d.valor) ? 'dia-semana-ativo' : ''}`}
-                  onClick={() => alternarDiaSemana(d.valor)}
-                >
-                  {d.curto}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {recorrenciaTipo === 'intervalo' && (
-            <div className="formulario-linha">
-              <label>
-                A cada quantos dias
-                <input
-                  type="number"
-                  min="2"
-                  step="1"
-                  inputMode="numeric"
-                  value={intervaloDias}
-                  onChange={(e) => setIntervaloDias(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                A partir de
-                <input
-                  type="date"
-                  value={dataReferencia}
-                  onChange={(e) => setDataReferencia(e.target.value)}
-                  required
-                />
-              </label>
-            </div>
-          )}
+          <CampoRecorrencia
+            recorrenciaTipo={recorrenciaTipo}
+            onChangeRecorrenciaTipo={setRecorrenciaTipo}
+            diasSemana={diasSemana}
+            onChangeDiasSemana={setDiasSemana}
+            intervaloDias={intervaloDias}
+            onChangeIntervaloDias={setIntervaloDias}
+            dataReferencia={dataReferencia}
+            onChangeDataReferencia={setDataReferencia}
+          />
 
           {/* Calendário de conferência: a cuidadora não precisa entender o
               modelo de recorrência, só olhar e reconhecer "é isso mesmo". */}

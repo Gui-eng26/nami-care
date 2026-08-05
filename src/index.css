@@ -1296,20 +1296,16 @@ p.criterio-uso-destaque {
   color: var(--cor-texto-suave);
 }
 
-/* Hora + dose lado a lado; a 375px o "Remover" quebra para a linha de baixo
-   em vez de espremer os campos. */
-.horario-linha {
-  flex-wrap: wrap;
-  align-items: flex-end;
+/* Cartão por horário (Sessão #17 — BUG-013): hora + dose + recorrência +
+   remover empilhados, porque a 375px não cabem numa linha só (a recorrência
+   é por horário — DEC-055 — não única para o medicamento). Reaproveita o
+   visual de .catalogo-bloco; só o fundo muda, pra diferenciar do bloco pai. */
+.horario-cartao {
+  background: var(--cor-superficie);
 }
 
-.horario-linha > label {
-  min-width: 7.5rem;
-}
-
-.horario-remover {
-  flex-shrink: 0;
-  margin-left: auto;
+.horario-cartao-remover {
+  align-self: flex-end;
 }
 
 .catalogo-cancelar-troca {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { fmtForma } from '../lib/formato.js'
+import CampoRecorrencia, { erroRecorrencia } from './CampoRecorrencia.jsx'
+import { proximosDias, geraDoseNoDia, fmtDiaCurto, fmtDiaSemanaCurto } from '../lib/recorrencia.js'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -159,10 +161,41 @@ export default function FormMedicamento({
   const [loteInicial, setLoteInicial] = useState('')
   const [validadeInicial, setValidadeInicial] = useState('')
 
-  // Horários (Sessão #10) — só no cadastro de contínuo. Começa com uma linha
-  // em branco: a grade é o que faz o medicamento existir na ronda.
-  const [horarios, setHorarios] = useState([{ hora: '', qtdDose: '1' }])
+  // Horários (Sessão #10) — só no cadastro de contínuo. Começa com um cartão
+  // em branco: a grade é o que faz o medicamento existir na ronda. Desde a
+  // Sessão #17 (BUG-013) cada cartão carrega sua própria recorrência
+  // (DEC-055) — a recorrência é por horário, não única para o medicamento (o
+  // caso do omeprazol em ciclos diferentes na mesma hora não cabe num padrão
+  // só).
+  const [horarios, setHorarios] = useState([novoHorario()])
   const [erroHorarios, setErroHorarios] = useState(null)
+
+  function novoHorario() {
+    return {
+      hora: '',
+      qtdDose: '1',
+      recorrenciaTipo: 'diario',
+      diasSemana: [],
+      intervaloDias: '2',
+      dataReferencia: hojeLocal()
+    }
+  }
+
+  function atualizarHorario(i, patch) {
+    setErroHorarios(null)
+    setHorarios((lista) => lista.map((item, j) => (j === i ? { ...item, ...patch } : item)))
+  }
+
+  // Para diasSemana especificamente: CampoRecorrencia manda uma função
+  // atualizadora, não o array pronto (ver comentário em alternarDiaSemana),
+  // porque dois toques em botões diferentes podem cair no mesmo lote do
+  // React antes do primeiro re-render.
+  function atualizarDiasSemanaHorario(i, fn) {
+    setErroHorarios(null)
+    setHorarios((lista) =>
+      lista.map((item, j) => (j === i ? { ...item, diasSemana: fn(item.diasSemana) } : item))
+    )
+  }
 
   useEffect(() => {
     if (modo !== 'buscar') return
@@ -190,6 +223,20 @@ export default function FormMedicamento({
   // Horários informados, sem linha em branco. Só valem no cadastro de contínuo.
   const horariosInformados =
     !medicamento && tipo === 'continuo' ? horarios.filter((h) => h.hora !== '') : []
+
+  // Calendário de conferência do cadastro (Parte 4, Sessão #17): próximos 14
+  // dias, considerando TODOS os horários do formulário juntos — é a visão que
+  // corresponde ao modelo mental da cuidadora ("neste dia, duas doses"), não
+  // um calendário por cartão. Mesmo padrão do FormHorario (`previewPorDia`).
+  // Prévia pura: não persiste nada.
+  const diasPreview = proximosDias(14)
+  const previewPorDia = diasPreview.map((dia) => ({
+    dia,
+    horas: horariosInformados
+      .filter((h) => geraDoseNoDia(h, dia))
+      .map((h) => h.hora)
+      .sort()
+  }))
 
   function submeter(e) {
     e.preventDefault()
@@ -257,6 +304,15 @@ export default function FormMedicamento({
         setErroHorarios('A dose de cada horário deve ser maior que zero, em passos de 0,5.')
         return
       }
+      // Recorrência por cartão (DEC-055, Sessão #17): com vários horários na
+      // tela, um erro genérico não diz qual corrigir — aponta pelo horário.
+      for (const h of horariosInformados) {
+        const erroRec = erroRecorrencia(h)
+        if (erroRec) {
+          setErroHorarios(`Horário ${h.hora}: ${erroRec}`)
+          return
+        }
+      }
     }
 
     // Critério de uso é obrigatório em SOS (DEC-057) — é o que decide a dose
@@ -281,7 +337,15 @@ export default function FormMedicamento({
       // Estoque mínimo só faz sentido para SOS (DEC-027).
       estoqueMinimo: tipo === 'sos' && estoqueMinimo !== '' ? Number(estoqueMinimo) : null,
       // Criados logo após o medicamento, pela RPC criar_horario (Sessão #10).
-      horarios: horariosInformados.map((h) => ({ hora: h.hora, qtdDose: Number(h.qtdDose) })),
+      // Recorrência por horário desde a Sessão #17 (DEC-055, BUG-013).
+      horarios: horariosInformados.map((h) => ({
+        hora: h.hora,
+        qtdDose: Number(h.qtdDose),
+        recorrenciaTipo: h.recorrenciaTipo,
+        diasSemana: h.recorrenciaTipo === 'dias_semana' ? h.diasSemana : null,
+        intervaloDias: h.recorrenciaTipo === 'intervalo' ? Number(h.intervaloDias) : null,
+        dataReferencia: h.recorrenciaTipo === 'intervalo' ? h.dataReferencia : null
+      })),
       estoqueInicial:
         !medicamento && qtdInicial !== '' && Number(qtdInicial) > 0
           ? {
@@ -517,52 +581,54 @@ export default function FormMedicamento({
             </label>
           )}
 
-          {/* Horários da ronda (Sessão #10) — só no cadastro de contínuo.
-              Mesma dupla hora + dose da tela de gestão, mesma RPC. */}
+          {/* Horários da ronda (Sessão #10) — só no cadastro de contínuo. Cada
+              horário é um cartão (Sessão #17, BUG-013): a 375px hora + dose +
+              recorrência não cabem numa linha só, e a recorrência é por
+              horário, nunca única para o medicamento (DEC-055). */}
           {!medicamento && tipo === 'continuo' && (
             <div className="catalogo-bloco">
               <span className="catalogo-rotulo">Horários das rondas</span>
               <p className="bloco-explicacao">
-                É o que gera as doses na ronda. Um horário por linha, com a dose
-                daquele horário.
+                É o que gera as doses na ronda. Um cartão por horário, com a
+                dose e a repetição daquele horário.
               </p>
               {horarios.map((h, i) => (
-                <div className="formulario-linha horario-linha" key={i}>
-                  <label>
-                    Horário
-                    <input
-                      type="time"
-                      value={h.hora}
-                      onChange={(e) => {
-                        const valor = e.target.value
-                        setErroHorarios(null)
-                        setHorarios((lista) =>
-                          lista.map((item, j) => (j === i ? { ...item, hora: valor } : item))
-                        )
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Dose ({rotuloUnidadePlural}, passos de 0,5)
-                    <input
-                      type="number"
-                      min="0.5"
-                      step="0.5"
-                      inputMode="decimal"
-                      value={h.qtdDose}
-                      onChange={(e) => {
-                        const valor = e.target.value
-                        setErroHorarios(null)
-                        setHorarios((lista) =>
-                          lista.map((item, j) => (j === i ? { ...item, qtdDose: valor } : item))
-                        )
-                      }}
-                    />
-                  </label>
+                <div className="catalogo-bloco horario-cartao" key={i}>
+                  <div className="formulario-linha">
+                    <label>
+                      Horário
+                      <input
+                        type="time"
+                        value={h.hora}
+                        onChange={(e) => atualizarHorario(i, { hora: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      Dose ({rotuloUnidadePlural}, passos de 0,5)
+                      <input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        inputMode="decimal"
+                        value={h.qtdDose}
+                        onChange={(e) => atualizarHorario(i, { qtdDose: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <CampoRecorrencia
+                    recorrenciaTipo={h.recorrenciaTipo}
+                    onChangeRecorrenciaTipo={(v) => atualizarHorario(i, { recorrenciaTipo: v })}
+                    diasSemana={h.diasSemana}
+                    onChangeDiasSemana={(fn) => atualizarDiasSemanaHorario(i, fn)}
+                    intervaloDias={h.intervaloDias}
+                    onChangeIntervaloDias={(v) => atualizarHorario(i, { intervaloDias: v })}
+                    dataReferencia={h.dataReferencia}
+                    onChangeDataReferencia={(v) => atualizarHorario(i, { dataReferencia: v })}
+                  />
                   {horarios.length > 1 && (
                     <button
                       type="button"
-                      className="botao-mini botao-mini-perigo horario-remover"
+                      className="botao-mini botao-mini-perigo horario-cartao-remover"
                       aria-label={`Remover o ${i + 1}º horário`}
                       onClick={() => {
                         setErroHorarios(null)
@@ -577,11 +643,31 @@ export default function FormMedicamento({
               <button
                 type="button"
                 className="botao-secundario botao-catalogo-novo"
-                onClick={() => setHorarios((lista) => [...lista, { hora: '', qtdDose: '1' }])}
+                onClick={() => setHorarios((lista) => [...lista, novoHorario()])}
               >
                 + Adicionar horário
               </button>
               {erroHorarios && <p className="aviso aviso-erro">{erroHorarios}</p>}
+
+              {/* Calendário de conferência (Parte 4): a cuidadora não pensa
+                  "8h a cada 2 dias" — pensa "dia sim dia não, num dia duas
+                  doses". O calendário traduz o padrão sem exigir que ela
+                  entenda o modelo. */}
+              <div className="calendario-conferencia">
+                <span className="catalogo-rotulo">Próximos dias (conferência)</span>
+                <ul className="calendario-lista">
+                  {previewPorDia.map(({ dia, horas }) => (
+                    <li key={dia.toISOString()} className="calendario-dia">
+                      <span className="calendario-dia-data">
+                        {fmtDiaSemanaCurto(dia)} {fmtDiaCurto(dia)}
+                      </span>
+                      <span className="calendario-dia-horas">
+                        {horas.length > 0 ? horas.join(' · ') : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
 

@@ -1909,3 +1909,89 @@ de Lima).
   DEC-054: `unidade_dose` deixa de ser gravável diretamente quando há
   `forma_id`, e passa a ser recusada em caso de divergência, não só imutável
   pós-uso.
+
+---
+
+## BUG-013 — recorrência de horário ausente no cadastro de medicamento
+
+**Encontrado:** 2026-08-05, no roteiro da Sessão #17, a partir de um caso real
+do product owner (o mesmo omeprazol que motivou a DEC-055) | **Corrigido:**
+2026-08-05, mesma sessão
+
+**Problema.** A DEC-055 (Sessão #16) implementou a recorrência de horário só
+no `FormHorario` — a tela de edição de horário dentro da Gestão de
+residentes. O `FormMedicamento` (a tela "Novo medicamento", usada tanto pela
+Gestão de residentes quanto pelo atalho "+ Medicamento" da aba Estoque) não
+tinha nenhuma referência a recorrência: todo horário criado no cadastro
+nascia `diario`, mesmo quando a cuidadora precisava de dias específicos. Não
+havia como cadastrar o caso do omeprazol (8h e 20h na segunda, só 20h na
+quarta) inteiramente pela tela de cadastro — só num segundo passo, editando
+cada horário depois pela Gestão de residentes, o que ninguém descobria
+sozinho.
+
+**Causa raiz.** Falha de especificação, não de execução: o roteiro da Sessão
+#16 dizia "Formulário de horário: seletor de modo…", e no código "formulário
+de horário" é literalmente o `FormHorario`. O bloco de horários que vive
+dentro do `FormMedicamento` nunca foi nomeado, então o executor implementou
+exatamente o que estava escrito — a DEC-055 ficou só parcialmente disponível
+por uma sessão inteira sem que isso fosse percebido, porque `criar_horario`
+aceita os 4 parâmetros de recorrência com default e nunca reclama da
+ausência deles.
+
+**Correção.**
+1. Sub-formulário de recorrência extraído para
+   `src/components/CampoRecorrencia.jsx` (select de modo, seletor de dias da
+   semana, campos de intervalo, e a validação — `erroRecorrencia` — que antes
+   vivia só no `submeter` do `FormHorario`). `FormHorario` passou a usar o
+   componente extraído, sem mudança de comportamento.
+2. `FormMedicamento`: cada horário virou um cartão (Horário, Dose,
+   `CampoRecorrencia`, Remover) em vez de uma linha — a 375px os três não
+   cabiam lado a lado, e a recorrência é por horário, nunca única para o
+   medicamento (mesmo motivo da DEC-055: o padrão do omeprazol não é
+   representável com um padrão só). Erro de recorrência incompleta aponta o
+   horário pelo valor da hora (ex.: "Horário 09:00: Selecione ao menos um dia
+   da semana"), porque com vários cartões um erro genérico não diz onde
+   corrigir.
+3. `criarHorariosIniciais` (`src/lib/horariosIniciais.js`) passou a repassar
+   `p_recorrencia_tipo`/`p_dias_semana`/`p_intervalo_dias`/`p_data_referencia`
+   para `criar_horario` — sem esta parte as Partes 1 e 2 não teriam efeito
+   nenhum, porque os defaults da RPC descartariam a escolha silenciosamente.
+4. Calendário de conferência (o mesmo padrão do `FormHorario`, reutilizando
+   `proximosDias`/`geraDoseNoDia`/`fmtDiaCurto`/`fmtDiaSemanaCurto` de
+   `src/lib/recorrencia.js`) adicionado ao `FormMedicamento`, considerando
+   todos os horários do formulário juntos — é na criação, montando o padrão do
+   zero, que ele mais evita erro.
+
+**Achado durante a extração, não no roteiro original.** O primeiro corte de
+`CampoRecorrencia` calculava o novo array de `diasSemana` a partir do valor
+recebido por prop (`diasSemana.includes(...)`) em vez de uma função
+atualizadora. Isso é equivalente ao código original **só** quando cada clique
+espera o re-render anterior — dois toques em dias diferentes no mesmo lote do
+React (confirmado via clique programático duplo, não alcançável por um toque
+humano real, mas real ainda assim) perdiam o primeiro toque, porque os dois
+fechamentos liam o mesmo `diasSemana` desatualizado. O `FormHorario` original
+nunca teve esse problema porque usava `setDiasSemana((lista) => ...)`
+(atualizador funcional). Corrigido fazendo `alternarDiaSemana` chamar
+`onChangeDiasSemana` com uma função — `FormHorario` passa o próprio
+`setDiasSemana` (que já resolve funções nativamente); `FormMedicamento` ganhou
+`atualizarDiasSemanaHorario`, que aplica a função contra o `diasSemana` atual
+daquele cartão dentro do próprio `setHorarios`.
+
+**Testado ponta a ponta em produção** (residente de teste "Guilherme Teste"):
+regressão do `FormHorario` (os três modos, toggle de dia da semana com
+seleção/deseleção, calendário) sem mudança de comportamento; caso do
+omeprazol (Esomeprazol 20mg de teste, 8h segunda + 20h segunda/quarta)
+cadastrado inteiramente pela tela de novo medicamento, com o calendário do
+cadastro mostrando exatamente o padrão esperado (segunda com duas doses,
+quarta só com uma), e conferido depois na ficha do medicamento que o horário
+das 8h gravou `recorrencia_tipo='dias_semana'`/`dias_semana={1}` no banco;
+erro de horário incompleto testado (`dias_semana` sem dia marcado) mostrando
+qual horário está incompleto; os dois caminhos de entrada testados (Gestão de
+residentes e atalho "+ Medicamento" da aba Estoque) — ambos com o cartão e o
+calendário funcionando; UI conferida a 375px nos três modos de recorrência,
+inclusive com dois cartões simultâneos.
+
+**Nota de arquitetura.** A DEC-055 só passou a estar **integralmente**
+disponível nesta sessão — entre a Sessão #16 e esta, o recurso existia no
+banco e numa das duas telas de escrita de horário, mas não na tela onde a
+maioria dos horários é criada pela primeira vez.

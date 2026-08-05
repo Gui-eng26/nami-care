@@ -19,10 +19,18 @@ export async function criarHorariosIniciais(medicamentoId, horarios) {
 
   const falhas = []
   for (const horario of horarios) {
+    // Recorrência (DEC-055) repassada desde a Sessão #17 (BUG-013) — sem
+    // isso os 4 parâmetros cairiam nos defaults da RPC e todo horário
+    // nasceria 'diario', descartando silenciosamente o que a cuidadora
+    // escolheu no cadastro.
     const { data, error } = await supabase.rpc('criar_horario', {
       p_medicamento_id: medicamentoId,
       p_hora: horario.hora,
-      p_qtd_dose: horario.qtdDose
+      p_qtd_dose: horario.qtdDose,
+      p_recorrencia_tipo: horario.recorrenciaTipo ?? 'diario',
+      p_dias_semana: horario.diasSemana ?? null,
+      p_intervalo_dias: horario.intervaloDias ?? null,
+      p_data_referencia: horario.dataReferencia ?? null
     })
     if (error) falhas.push(`${horario.hora} (falha de conexão)`)
     else if (!data.ok) falhas.push(`${horario.hora} (${mensagemErro(data)})`)
