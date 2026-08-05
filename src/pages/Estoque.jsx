@@ -298,6 +298,7 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
   const [extrato, setExtrato] = useState(null)
   const [modal, setModal] = useState(null) // 'entrada' | 'ajuste' | 'perda'
   const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
 
   // Uma leitura só do ledger (DEC-049): a ficha consome a MESMA RPC da aba
   // "Extrato de movimentações", com período nulo = últimas 50, que é o que ela
@@ -320,15 +321,20 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
 
   const situacao = rotuloSituacao(item)
 
+  // BUG-016: os três modais (entrada/ajuste/perda) só chamam esta função a
+  // partir de si mesmos, então o erro é sempre "de dentro do modal" —
+  // `erroModal`, que some quando o modal fecha. `aviso` (página) fica
+  // reservado ao sucesso, que é o que faz sentido ler depois que o modal já
+  // fechou.
   async function chamarRpc(nome, params, textoOk) {
-    setAviso(null)
+    setErroModal(null)
     const { data, error } = await supabase.rpc(nome, params)
     if (error) {
-      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      setErroModal('Falha de conexão. Tente novamente.')
       return false
     }
     if (!data.ok) {
-      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      setErroModal(mensagemErro(data))
       return false
     }
     setModal(null)
@@ -415,14 +421,14 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
 
       <div className="acoes-item">
         {item.ativo && (
-          <button type="button" className="botao-mini" onClick={() => { setAviso(null); setModal('entrada') }}>
+          <button type="button" className="botao-mini" onClick={() => { setErroModal(null); setAviso(null); setModal('entrada') }}>
             + Registrar compra
           </button>
         )}
-        <button type="button" className="botao-mini" onClick={() => { setAviso(null); setModal('ajuste') }}>
+        <button type="button" className="botao-mini" onClick={() => { setErroModal(null); setAviso(null); setModal('ajuste') }}>
           Ajustar por contagem
         </button>
-        <button type="button" className="botao-mini botao-mini-perigo" onClick={() => { setAviso(null); setModal('perda') }}>
+        <button type="button" className="botao-mini botao-mini-perigo" onClick={() => { setErroModal(null); setAviso(null); setModal('perda') }}>
           Registrar perda
         </button>
       </div>
@@ -462,8 +468,8 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'entrada' && (
         <ModalEntrada
           item={item}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setModal(null)}
+          erroServidor={erroModal}
+          onFechar={() => { setErroModal(null); setModal(null) }}
           onSalvar={(valores) =>
             chamarRpc(
               'registrar_entrada_estoque',
@@ -484,8 +490,8 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'ajuste' && (
         <ModalAjuste
           item={item}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setModal(null)}
+          erroServidor={erroModal}
+          onFechar={() => { setErroModal(null); setModal(null) }}
           onSalvar={(valores) =>
             chamarRpc(
               'registrar_ajuste_estoque',
@@ -507,8 +513,8 @@ function FichaEstoque({ item, lotes = [], onVoltar, onMovimentado }) {
       {modal === 'perda' && (
         <ModalPerda
           item={item}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setModal(null)}
+          erroServidor={erroModal}
+          onFechar={() => { setErroModal(null); setModal(null) }}
           onSalvar={(valores) =>
             chamarRpc(
               'registrar_perda_estoque',

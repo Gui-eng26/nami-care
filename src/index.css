@@ -241,13 +241,32 @@ body {
   width: 100%;
 }
 
-/* BUG-004 — o `min-width: 0` acima resolve o rótulo, não o campo de data. No
-   WebKit o input[type="date"] tem largura INTRÍNSECA própria, derivada do
-   formato da data, e não encolhe abaixo dela nem com `width: 100%`: transborda
-   o label e invade o vizinho. Global de propósito — protege os modais de
-   validade do estoque e as datas do FormMedicamento, que continuam lado a
-   lado. */
-input[type='date'] {
+/* BUG-015 — quando os dois rótulos de uma `.formulario-linha` ocupam número
+   diferente de linhas de texto (ex.: "Horário" vs. "Dose (comprimidos,
+   passos de 0,5)"), os inputs nascem em alturas diferentes e a linha fica
+   torta. `.formulario label` já é flex column (rótulo em cima, input
+   embaixo); aqui é só alinhar o input pela BASE em vez do topo, o que
+   conserta todo par de campos da tela sem depender do tamanho do texto do
+   rótulo. */
+.formulario-linha > label {
+  display: flex;
+  flex-direction: column;
+}
+
+.formulario-linha > label > input,
+.formulario-linha > label > select {
+  margin-top: auto;
+}
+
+/* BUG-004/BUG-014 — o `min-width: 0` acima resolve o rótulo, não o campo em
+   si. No WebKit, `input[type="date"]` e `input[type="time"]` têm largura
+   INTRÍNSECA própria, derivada do formato exibido, e não encolhem abaixo
+   dela nem com `width: 100%`: transbordam o label e invadem o vizinho.
+   Global de propósito — protege os modais de validade do estoque, as datas
+   do FormMedicamento e o cartão de horário (hora + dose lado a lado), que
+   continuam lado a lado. */
+input[type='date'],
+input[type='time'] {
   appearance: none;
   -webkit-appearance: none;
   min-width: 0;

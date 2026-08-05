@@ -86,12 +86,12 @@ export default function GestaoResidentes() {
 
 function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
   const [form, setForm] = useState(false)
-  const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
   async function criar(valores) {
     setOcupado(true)
-    setAviso(null)
+    setErroModal(null)
     const { data, error } = await supabase.rpc('criar_residente', {
       p_nome: valores.nome,
       p_nascimento: valores.nascimento || null,
@@ -99,11 +99,11 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
     })
     setOcupado(false)
     if (error) {
-      setAviso('Falha de conexão. Tente novamente.')
+      setErroModal('Falha de conexão. Tente novamente.')
       return
     }
     if (!data.ok) {
-      setAviso(mensagemErro(data))
+      setErroModal(mensagemErro(data))
       return
     }
     setForm(false)
@@ -121,14 +121,13 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
           type="button"
           className="botao-mini"
           onClick={() => {
-            setAviso(null)
+            setErroModal(null)
             setForm(true)
           }}
         >
           + Novo residente
         </button>
       </div>
-      {aviso && <p className="aviso aviso-erro">{aviso}</p>}
       <ul className="lista-gestao">
         {residentes.map((r) => (
           <li key={r.id}>
@@ -165,8 +164,11 @@ function ListaResidentes({ residentes, onAbrir, onRecarregar }) {
       {form && (
         <FormResidente
           ocupado={ocupado}
-          erroServidor={aviso}
-          onFechar={() => setForm(false)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(false)
+          }}
           onSalvar={criar}
         />
       )}
@@ -179,6 +181,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
   const [medicamento, setMedicamento] = useState(null)
   const [form, setForm] = useState(null) // 'residente' | 'medicamento'
   const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
   // catalogo:catalogo_medicamentos(...) embute a unidade estruturada (DEC-051)
@@ -200,17 +203,27 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
     carregarMedicamentos()
   }, [carregarMedicamentos])
 
-  async function chamarRpc(nome, params) {
+  // `comoModal` (BUG-016): erro de uma chamada disparada de DENTRO de um
+  // modal (Editar residente/medicamento) fica só no modal — `erroModal`, que
+  // some quando o modal fecha. Sem `comoModal` (padrão), o alvo é a página —
+  // caso de `definir_ativo_residente`, disparada por um botão direto, sem
+  // modal por cima para cobrir o aviso.
+  async function chamarRpc(nome, params, comoModal = false) {
     setOcupado(true)
     setAviso(null)
+    if (comoModal) setErroModal(null)
     const { data, error } = await supabase.rpc(nome, params)
     setOcupado(false)
     if (error) {
-      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      const texto = 'Falha de conexão. Tente novamente.'
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     if (!data.ok) {
-      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      const texto = mensagemErro(data)
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     return data
@@ -252,6 +265,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
           type="button"
           className="botao-mini"
           onClick={() => {
+            setErroModal(null)
             setAviso(null)
             setForm('residente')
           }}
@@ -285,6 +299,7 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
             type="button"
             className="botao-mini"
             onClick={() => {
+              setErroModal(null)
               setAviso(null)
               setForm('medicamento')
             }}
@@ -347,15 +362,22 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
         <FormResidente
           residente={residente}
           ocupado={ocupado}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setForm(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(null)
+          }}
           onSalvar={async (valores) => {
-            const r = await chamarRpc('atualizar_residente', {
-              p_idoso_id: residente.id,
-              p_nome: valores.nome,
-              p_nascimento: valores.nascimento || null,
-              p_observacoes: valores.observacoes || null
-            })
+            const r = await chamarRpc(
+              'atualizar_residente',
+              {
+                p_idoso_id: residente.id,
+                p_nome: valores.nome,
+                p_nascimento: valores.nascimento || null,
+                p_observacoes: valores.observacoes || null
+              },
+              true
+            )
             if (r) {
               setForm(null)
               onAtualizado()
@@ -367,22 +389,30 @@ function FichaResidente({ residente, onVoltar, onAtualizado }) {
         <FormMedicamento
           daCasa={residente.eh_sentinela}
           ocupado={ocupado}
-          onFechar={() => setForm(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(null)
+          }}
           onSalvar={async (valores) => {
-            const r = await chamarRpc('criar_medicamento', {
-              p_catalogo_id: valores.catalogoId,
-              p_idoso_id: residente.id,
-              p_nome: valores.nome,
-              p_dosagem: valores.dosagem || null,
-              p_forma_farmaceutica: valores.forma || null,
-              p_forma_id: valores.formaId,
-              p_criterio_uso: valores.criterioUso || null,
-              p_observacoes: valores.observacoes || null,
-              p_tipo: valores.tipo,
-              p_estoque_minimo: valores.estoqueMinimo,
-              p_gotas_por_ml: valores.gotasPorMl,
-              p_volume_frasco_ml: valores.volumeFrascoMl
-            })
+            const r = await chamarRpc(
+              'criar_medicamento',
+              {
+                p_catalogo_id: valores.catalogoId,
+                p_idoso_id: residente.id,
+                p_nome: valores.nome,
+                p_dosagem: valores.dosagem || null,
+                p_forma_farmaceutica: valores.forma || null,
+                p_forma_id: valores.formaId,
+                p_criterio_uso: valores.criterioUso || null,
+                p_observacoes: valores.observacoes || null,
+                p_tipo: valores.tipo,
+                p_estoque_minimo: valores.estoqueMinimo,
+                p_gotas_por_ml: valores.gotasPorMl,
+                p_volume_frasco_ml: valores.volumeFrascoMl
+              },
+              true
+            )
             if (r) {
               setForm(null)
               // Horários (Sessão #10) e estoque inicial (Sessão #8):
@@ -411,6 +441,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
   const [horarios, setHorarios] = useState(null)
   const [form, setForm] = useState(null) // {modo:'medicamento'} | {modo:'horario', horario?}
   const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
   const carregarHorarios = useCallback(async () => {
@@ -427,17 +458,23 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
     carregarHorarios()
   }, [carregarHorarios])
 
-  async function chamarRpc(nome, params) {
+  // `comoModal` (BUG-016): ver comentário equivalente em FichaResidente.
+  async function chamarRpc(nome, params, comoModal = false) {
     setOcupado(true)
     setAviso(null)
+    if (comoModal) setErroModal(null)
     const { data, error } = await supabase.rpc(nome, params)
     setOcupado(false)
     if (error) {
-      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      const texto = 'Falha de conexão. Tente novamente.'
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     if (!data.ok) {
-      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      const texto = mensagemErro(data)
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     return data
@@ -456,6 +493,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
           type="button"
           className="botao-mini"
           onClick={() => {
+            setErroModal(null)
             setAviso(null)
             setForm({ modo: 'medicamento' })
           }}
@@ -489,6 +527,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
                 type="button"
                 className="botao-mini"
                 onClick={() => {
+                  setErroModal(null)
                   setAviso(null)
                   setForm({ modo: 'horario' })
                 }}
@@ -519,6 +558,7 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
                           className="botao-mini"
                           disabled={ocupado}
                           onClick={() => {
+                            setErroModal(null)
                             setAviso(null)
                             setForm({ modo: 'horario', horario: h })
                           }}
@@ -593,23 +633,30 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
           medicamento={medicamento}
           daCasa={residente.eh_sentinela}
           ocupado={ocupado}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setForm(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(null)
+          }}
           onSalvar={async (valores) => {
-            const r = await chamarRpc('atualizar_medicamento', {
-              p_medicamento_id: medicamento.id,
-              p_catalogo_id: valores.catalogoId,
-              p_nome: valores.nome,
-              p_dosagem: valores.dosagem || null,
-              p_forma_farmaceutica: valores.forma || null,
-              p_forma_id: valores.formaId,
-              p_criterio_uso: valores.criterioUso || null,
-              p_observacoes: valores.observacoes || null,
-              p_tipo: valores.tipo,
-              p_estoque_minimo: valores.estoqueMinimo,
-              p_gotas_por_ml: valores.gotasPorMl,
-              p_volume_frasco_ml: valores.volumeFrascoMl
-            })
+            const r = await chamarRpc(
+              'atualizar_medicamento',
+              {
+                p_medicamento_id: medicamento.id,
+                p_catalogo_id: valores.catalogoId,
+                p_nome: valores.nome,
+                p_dosagem: valores.dosagem || null,
+                p_forma_farmaceutica: valores.forma || null,
+                p_forma_id: valores.formaId,
+                p_criterio_uso: valores.criterioUso || null,
+                p_observacoes: valores.observacoes || null,
+                p_tipo: valores.tipo,
+                p_estoque_minimo: valores.estoqueMinimo,
+                p_gotas_por_ml: valores.gotasPorMl,
+                p_volume_frasco_ml: valores.volumeFrascoMl
+              },
+              true
+            )
             if (r) {
               setForm(null)
               onAtualizado()
@@ -623,8 +670,11 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
           horariosExistentes={horarios?.filter((h) => h.ativo && h.id !== form.horario?.id) ?? []}
           rotuloUnidade={fmtForma(2, medicamento.forma_farmaceutica, medicamento.catalogo?.unidade_dose)}
           ocupado={ocupado}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setForm(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(null)
+          }}
           onSalvar={async (valores) => {
             const params = {
               p_hora: valores.hora,
@@ -635,8 +685,8 @@ function FichaMedicamento({ residente, medicamento, onVoltar, onAtualizado }) {
               p_data_referencia: valores.dataReferencia
             }
             const r = form.horario
-              ? await chamarRpc('atualizar_horario', { p_horario_id: form.horario.id, ...params })
-              : await chamarRpc('criar_horario', { p_medicamento_id: medicamento.id, ...params })
+              ? await chamarRpc('atualizar_horario', { p_horario_id: form.horario.id, ...params }, true)
+              : await chamarRpc('criar_horario', { p_medicamento_id: medicamento.id, ...params }, true)
             if (r) {
               setForm(null)
               if (r.versionado) {
@@ -758,6 +808,9 @@ function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado,
     <div className="modal-fundo" onClick={onFechar}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{horario ? `Editar horário ${horario.hora.slice(0, 5)}` : 'Novo horário'}</h3>
+        <p className="bloco-explicacao">
+          Dose em <strong>{rotuloUnidade ?? 'unidades'}</strong>, passos de 0,5.
+        </p>
         <form className="formulario" onSubmit={submeter}>
           <div className="formulario-linha">
             <label>
@@ -765,7 +818,7 @@ function FormHorario({ horario, horariosExistentes = [], rotuloUnidade, ocupado,
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} required />
             </label>
             <label>
-              Dose ({rotuloUnidade ?? 'unidades'}, passos de 0,5)
+              Dose
               <input
                 type="number"
                 min="0.5"

@@ -10,6 +10,7 @@ export default function GestaoCuidadoras({ credencial }) {
   const [aberta, setAberta] = useState(null)
   const [form, setForm] = useState(null) // {modo:'nova'|'editar'|'pin', cuidadora?}
   const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -25,9 +26,15 @@ export default function GestaoCuidadoras({ credencial }) {
     carregar()
   }, [carregar])
 
-  async function chamarRpc(nome, params) {
+  // `comoModal` (BUG-016): erro de uma ação disparada de DENTRO do modal
+  // (criar/editar cuidadora, redefinir PIN) fica só no modal — `erroModal`,
+  // que some quando o modal fecha. Sem `comoModal` (padrão), o alvo é a
+  // página — caso de `definir_ativo_cuidador` (alternarAtiva), disparada
+  // direto pela lista, sem modal por cima para cobrir o aviso.
+  async function chamarRpc(nome, params, comoModal = false) {
     setOcupado(true)
     setAviso(null)
+    if (comoModal) setErroModal(null)
     const { data, error } = await supabase.rpc(nome, {
       p_admin_id: credencial.id,
       p_admin_pin: credencial.pin,
@@ -35,11 +42,15 @@ export default function GestaoCuidadoras({ credencial }) {
     })
     setOcupado(false)
     if (error) {
-      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      const texto = 'Falha de conexão. Tente novamente.'
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     if (!data.ok) {
-      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      const texto = mensagemErro(data)
+      if (comoModal) setErroModal(texto)
+      else setAviso({ tipo: 'erro', texto })
       return null
     }
     return data
@@ -72,6 +83,7 @@ export default function GestaoCuidadoras({ credencial }) {
           type="button"
           className="botao-mini"
           onClick={() => {
+            setErroModal(null)
             setAviso(null)
             setForm({ modo: 'nova' })
           }}
@@ -107,6 +119,7 @@ export default function GestaoCuidadoras({ credencial }) {
                       className="botao-mini"
                       disabled={ocupado}
                       onClick={() => {
+                        setErroModal(null)
                         setAviso(null)
                         setForm({ modo: 'editar', cuidadora: c })
                       }}
@@ -118,6 +131,7 @@ export default function GestaoCuidadoras({ credencial }) {
                       className="botao-mini"
                       disabled={ocupado}
                       onClick={() => {
+                        setErroModal(null)
                         setAviso(null)
                         setForm({ modo: 'pin', cuidadora: c })
                       }}
@@ -144,27 +158,42 @@ export default function GestaoCuidadoras({ credencial }) {
         <FormCuidadora
           form={form}
           ocupado={ocupado}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setForm(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setForm(null)
+          }}
           onSalvar={async (valores) => {
             let r
             if (form.modo === 'nova') {
-              r = await chamarRpc('criar_cuidador', {
-                p_nome: valores.nome,
-                p_pin: valores.pin,
-                p_eh_admin: valores.ehAdmin
-              })
+              r = await chamarRpc(
+                'criar_cuidador',
+                {
+                  p_nome: valores.nome,
+                  p_pin: valores.pin,
+                  p_eh_admin: valores.ehAdmin
+                },
+                true
+              )
             } else if (form.modo === 'editar') {
-              r = await chamarRpc('atualizar_cuidador', {
-                p_cuidador_id: form.cuidadora.id,
-                p_nome: valores.nome,
-                p_eh_admin: valores.ehAdmin
-              })
+              r = await chamarRpc(
+                'atualizar_cuidador',
+                {
+                  p_cuidador_id: form.cuidadora.id,
+                  p_nome: valores.nome,
+                  p_eh_admin: valores.ehAdmin
+                },
+                true
+              )
             } else {
-              r = await chamarRpc('redefinir_pin', {
-                p_cuidador_id: form.cuidadora.id,
-                p_pin_novo: valores.pin
-              })
+              r = await chamarRpc(
+                'redefinir_pin',
+                {
+                  p_cuidador_id: form.cuidadora.id,
+                  p_pin_novo: valores.pin
+                },
+                true
+              )
             }
             if (r) {
               setForm(null)

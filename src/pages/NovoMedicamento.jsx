@@ -21,6 +21,7 @@ export default function NovoMedicamento({ onVoltar }) {
   const [residentes, setResidentes] = useState(null)
   const [residente, setResidente] = useState(null)
   const [aviso, setAviso] = useState(null)
+  const [erroModal, setErroModal] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
   useEffect(() => {
@@ -33,9 +34,13 @@ export default function NovoMedicamento({ onVoltar }) {
       .then(({ data, error }) => setResidentes(error ? [] : data))
   }, [])
 
+  // O erro de criar_medicamento fica no modal (BUG-016): o formulário segue
+  // aberto para a cuidadora tentar de novo. `aviso` (página) fica reservado
+  // ao resultado depois que o modal já fechou — sucesso, ou falha das
+  // chamadas encadeadas de horários/estoque, que rodam só depois.
   async function salvar(valores) {
     setOcupado(true)
-    setAviso(null)
+    setErroModal(null)
     const { data, error } = await supabase.rpc('criar_medicamento', {
       p_idoso_id: residente.id,
       p_catalogo_id: valores.catalogoId,
@@ -52,12 +57,12 @@ export default function NovoMedicamento({ onVoltar }) {
     })
     if (error) {
       setOcupado(false)
-      setAviso({ tipo: 'erro', texto: 'Falha de conexão. Tente novamente.' })
+      setErroModal('Falha de conexão. Tente novamente.')
       return
     }
     if (!data.ok) {
       setOcupado(false)
-      setAviso({ tipo: 'erro', texto: mensagemErro(data) })
+      setErroModal(mensagemErro(data))
       return
     }
 
@@ -112,6 +117,7 @@ export default function NovoMedicamento({ onVoltar }) {
               type="button"
               className={`botao-cuidador ${r.eh_sentinela ? 'botao-cuidador-casa' : ''}`}
               onClick={() => {
+                setErroModal(null)
                 setAviso(null)
                 setResidente(r)
               }}
@@ -137,8 +143,11 @@ export default function NovoMedicamento({ onVoltar }) {
               : `Para ${residente.nome}`
           }
           ocupado={ocupado}
-          erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}
-          onFechar={() => setResidente(null)}
+          erroServidor={erroModal}
+          onFechar={() => {
+            setErroModal(null)
+            setResidente(null)
+          }}
           onSalvar={salvar}
         />
       )}

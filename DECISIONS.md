@@ -1995,3 +1995,123 @@ inclusive com dois cartões simultâneos.
 disponível nesta sessão — entre a Sessão #16 e esta, o recurso existia no
 banco e numa das duas telas de escrita de horário, mas não na tela onde a
 maioria dos horários é criada pela primeira vez.
+
+---
+
+## BUG-014 — `input[type='time']` sem tratamento de largura no cartão de horário
+
+**Encontrado:** 2026-08-05, numa captura do product owner mostrando o cartão
+de horário (Sessão #10/#17) com as caixas de Horário e Dose sobrepostas no
+iPhone da cliente | **Corrigido:** 2026-08-05, Sessão #18
+
+**Problema.** Dentro de `.formulario-linha` (flex, dois campos lado a lado),
+o `input[type="time"]` do cartão de horário transbordava o próprio `<label>`
+e invadia o campo de Dose ao lado — a sobreposição visível na captura.
+
+**Causa raiz.** No WebKit, `input[type="time"]` tem largura INTRÍNSECA
+própria, derivada do formato da hora, e não encolhe abaixo dela nem com
+`width: 100%`. Isto é exatamente o mesmo defeito da BUG-004, que já havia
+sido diagnosticado e corrigido para `input[type="date"]` — a correção não
+tinha sido estendida ao `time`, que só passou a existir no cartão de horário
+na Sessão #10, depois da BUG-004.
+
+**Correção.** `src/index.css`: a regra de `input[type='date']` (BUG-004)
+passou a cobrir também `input[type='time']`, mesmo bloco e mesmo mecanismo
+(`appearance: none` + `min-width: 0` + `width: 100%`), com o comentário
+atualizado para registrar que o defeito vale para os dois tipos.
+
+**Testado.** A 375px, cartão de horário do cadastro de medicamento
+(`FormMedicamento`) e do `FormHorario` (edição, Gestão de residentes): campo
+de Horário e campo de Dose lado a lado, sem sobreposição, largura de
+141,5px cada, sem invadir o vizinho.
+
+---
+
+## BUG-015 — alinhamento vertical torto em pares de campo com rótulos de altura diferente
+
+**Encontrado:** 2026-08-05, na mesma captura da BUG-014 — a caixa de Dose
+nascia mais alta que a de Horário, porque o rótulo "Dose (comprimidos,
+passos de 0,5)" quebrava em duas linhas contra o rótulo "Horário", de uma
+linha só | **Corrigido:** 2026-08-05, Sessão #18
+
+**Problema.** `.formulario-linha > label` é um flex item com o texto do
+rótulo em cima do input. Quando os dois rótulos de uma linha ocupam número
+diferente de linhas de texto, os inputs nascem em alturas diferentes e a
+linha fica torta. Levantamento no roteiro encontrou nove pares de campo no
+projeto sob risco do mesmo padrão (`FormMedicamento`, `GestaoResidentes.jsx`,
+`Estoque.jsx`, `CampoRecorrencia.jsx`), com wrap confirmado no par "Lote
+encontrado (opcional)" + "Validade" do `ModalAjuste` a 375px.
+
+**Correção — duas partes complementares, uma na causa e outra como defesa.**
+1. **Causa, só para o par Horário/Dose:** a unidade saiu do rótulo do campo
+   ("Dose (comprimidos, passos de 0,5)" → só "Dose") e subiu para o texto de
+   apoio do bloco — dita uma vez ali, não repetida em cada cartão. No
+   `FormMedicamento`, entrou na frase já existente em "Horários das rondas"
+   ("Doses em **{unidade}**, passos de 0,5."); no `FormHorario`
+   (`GestaoResidentes.jsx`), que não tinha um texto de bloco equivalente,
+   ganhou um parágrafo novo logo abaixo do título ("Dose em **{unidade}**,
+   passos de 0,5."). Confirmado em produção mostrando "gotas" corretamente
+   pluralizado para um item líquido, não só "comprimidos".
+2. **Defesa, para todo par da tela:** `src/index.css`, alinhamento dos
+   inputs de `.formulario-linha > label` pela BASE em vez do topo
+   (`margin-top: auto` no input/select, aproveitando que o rótulo já é flex
+   column). Resolve todos os nove pares levantados de uma vez, inclusive os
+   que a Parte 1 não alcança, e não volta a quebrar se algum rótulo crescer
+   no futuro (ex.: "Solução oral em gotas" gerando rótulos mais longos que
+   "Comprimido").
+
+**Testado.** Verificação por DOM (`getBoundingClientRect`) no par Horário +
+Dose (tops diferentes por causa do ícone do relógio, bottoms idênticos) e no
+par Lote encontrado (opcional) + Validade do `ModalAjuste`, forçado a
+"contagem para cima" para aparecer: rótulo do lote quebrado em duas linhas,
+input de validade com rótulo de uma linha só, os dois inputs terminando na
+mesma coordenada — confirmado visualmente por screenshot a 375px.
+
+---
+
+## BUG-016 — erro de modal sobrevivendo ao cancelamento, escrito também na página
+
+**Encontrado:** 2026-08-05, revisão de código na Sessão #18, como resíduo da
+BUG-011 (corrigida na Sessão #16) | **Corrigido:** 2026-08-05, mesma sessão
+
+**Problema.** A BUG-011 fez os nove modais do projeto receberem
+`erroServidor` como prop e renderizarem o erro **dentro** do modal — isso
+corrigiu o sintoma principal (erro invisível atrás do modal). Mas em
+`Estoque.jsx`, `GestaoResidentes.jsx`, `GestaoCuidadoras.jsx` e
+`NovoMedicamento.jsx`, a função que chama a RPC continuava escrevendo o erro
+num único estado `aviso` da PÁGINA, e o modal só lia
+`erroServidor={aviso?.tipo === 'erro' ? aviso.texto : null}` — a mesma
+mensagem passou a existir em dois lugares: dentro do modal (visível,
+correto) e na página atrás dele (invisível enquanto o modal está aberto,
+mas ainda lá). Ao cancelar, o modal fecha e a mensagem de erro **reaparece
+na página**, como se algo tivesse acabado de falhar agora — a cuidadora
+desistiu da ação e continua sendo avisada de uma falha que já viu e já
+tratou. Em `GestaoResidentes.jsx`/`FichaResidente`, o mesmo padrão
+apareceu também no `FormMedicamento` de cadastro, que sequer recebia
+`erroServidor` — o erro de `criar_medicamento` ficava só na página, atrás do
+modal, reproduzindo a BUG-011 original para esse caso específico.
+`Ronda.jsx` e `DoseSos.jsx` nunca tiveram o problema: o erro sempre foi
+estado local do próprio modal.
+
+**Correção.** Nos quatro arquivos, o estado único `aviso` virou dois:
+`erroModal` (erro de uma ação disparada de DENTRO de um modal — some quando
+o modal fecha, via `onFechar`) e `aviso` (reservado ao resultado depois que
+o modal já fechou: sucesso, ou uma falha de chamada encadeada que só roda
+depois do fechamento, como os horários/estoque inicial do cadastro de
+medicamento). Onde a mesma função `chamarRpc` atende tanto ações de modal
+quanto ações diretas da página (ex.: `definir_ativo_residente`, sem modal
+por cima para cobrir o aviso), ganhou um parâmetro `comoModal` que decide o
+alvo do erro; em `Estoque.jsx`, todo uso de `chamarRpc` é de dentro de
+modal, então o erro foi só redirecionado, sem parâmetro novo. Todo ponto que
+abre um modal passou a limpar `erroModal` (e `aviso`, preservando o
+comportamento de sempre de descartar um aviso antigo ao iniciar uma ação
+nova).
+
+**Testado.** Forçado horário duplicado (14:00 já ativo) no `FormHorario` de
+`Besilato de Anlodipino 5mg` (residente de teste "Guilherme Teste"): erro
+"Já existe um horário ativo nesse instante para este medicamento." aparece
+dentro do modal; ao cancelar, a mensagem some da página — confirmado por
+leitura do DOM antes e depois do cancelamento. Mensagem de sucesso
+("Perda registrada. Saldo atual: 0.") testada em `Estoque.jsx`/`ModalPerda`
+e confirmada aparecendo na página depois do modal fechar, sem regressão.
+`Ronda.jsx` e `DoseSos.jsx` não tocados.

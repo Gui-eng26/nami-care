@@ -590,7 +590,8 @@ export default function FormMedicamento({
               <span className="catalogo-rotulo">Horários das rondas</span>
               <p className="bloco-explicacao">
                 É o que gera as doses na ronda. Um cartão por horário, com a
-                dose e a repetição daquele horário.
+                dose e a repetição daquele horário. Doses em{' '}
+                <strong>{rotuloUnidadePlural}</strong>, passos de 0,5.
               </p>
               {horarios.map((h, i) => (
                 <div className="catalogo-bloco horario-cartao" key={i}>
@@ -604,7 +605,7 @@ export default function FormMedicamento({
                       />
                     </label>
                     <label>
-                      Dose ({rotuloUnidadePlural}, passos de 0,5)
+                      Dose
                       <input
                         type="number"
                         min="0.5"
